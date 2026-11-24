@@ -1,6 +1,8 @@
 package com.focus.app;
 
 import android.app.Activity;
+import android.app.NotificationManager;
+
 import android.app.Dialog;
 import android.graphics.drawable.ColorDrawable;
 import android.view.Window;
