@@ -27,6 +27,8 @@ public class TimerService extends Service {
     public static final String ACTION_STOP_ALARM = "com.focus.app.ACTION_STOP_ALARM";
     public static final String ACTION_EXTRA_TIME = "com.focus.app.ACTION_EXTRA_TIME";
     public static final String ACTION_ALERT_STOPPED = "com.focus.app.ACTION_ALERT_STOPPED";
+    public static final String ACTION_START_STUDY = "com.focus.app.ACTION_START_STUDY";
+
 
     private static final String CHANNEL_TIMER = "focus_timer";
     private static final String CHANNEL_ALERTS = "focus_alerts";
@@ -39,6 +41,8 @@ public class TimerService extends Service {
     private String activeAmbientKey;
 
     private final Runnable ambientStopRunnable = this::stopAmbientPlayback;
+    private final Runnable alarmTimeoutRunnable = this::stopAlarmOnly;
+
     private final SharedPreferences.OnSharedPreferenceChangeListener ambientPrefsListener = (shared, key) -> {
         if ("ambient_play_enabled".equals(key) || "ambient_sound_key".equals(key)
                 || "ambient_volume".equals(key) || "running".equals(key) || "phase".equals(key)
@@ -87,15 +91,38 @@ public class TimerService extends Service {
         if (intent != null && intent.getAction() != null) {
             String act = intent.getAction();
             if (ACTION_STOP_ALARM.equals(act)) {
-                stopAlarmAndNotify();
-                if (!prefs.getBoolean("running", false)) {
-                    // keep notification visible if timer paused
-                    long rem = prefs.getLong("remaining_ms", sessionDuration());
-                    updateTimerNotification(clock(rem), false);
-                }
+                stopAlarmOnly();
+                try {
+                    NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    if (nm != null) nm.cancel(11);
+                } catch (Exception ignored) {}
+                return START_STICKY;
+            } else if (ACTION_START_STUDY.equals(act)) {
+                stopAlarmOnly();
+                try {
+                    NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    if (nm != null) nm.cancel(11);
+                } catch (Exception ignored) {}
+                long dur = minutesFor(0) * 60000L;
+                long endAt = System.currentTimeMillis() + dur;
+                prefs.edit()
+                        .putInt("phase", 0)
+                        .putBoolean("running", true)
+                        .putLong("session_duration_ms", dur)
+                        .putLong("remaining_ms", dur)
+                        .putLong("end_at", endAt)
+                        .apply();
+                handler.removeCallbacks(tick);
+                syncAmbientPlayback();
+                startForeground(10, buildTimerNotification(clock(dur), true));
+                handler.post(tick);
                 return START_STICKY;
             } else if (ACTION_EXTRA_TIME.equals(act)) {
-                stopAlarmAndNotify();
+                stopAlarmOnly();
+                try {
+                    NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    if (nm != null) nm.cancel(11);
+                } catch (Exception ignored) {}
                 int ep = intent.getIntExtra("ended_phase", 0);
                 long addMs = 5 * 60 * 1000L;
                 long total = sessionDuration() + addMs;
@@ -219,22 +246,87 @@ public class TimerService extends Service {
         }
 
         editor.putBoolean("running", false).apply();
-        updateTimerNotification(clock(dur), false);
+        try {
+            stopForeground(true);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(10);
+        } catch (Exception ignored) {}
         handler.removeCallbacks(tick);
         finishing = false;
     }
 
     private void showCompletionAlert(int endedPhase) {
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+
+        // Interactive full-screen intent over lockscreen
         Intent alertIntent = new Intent(this, SessionAlertActivity.class);
         alertIntent.putExtra("ended_phase", endedPhase);
         alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-
-        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) piFlags |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent fullScreenPending = PendingIntent.getActivity(this, 100, alertIntent, piFlags);
 
-        String title = (endedPhase == 0) ? "انتهى الوقت" : "انتهت الاستراحه!";
-        String text = (endedPhase == 0) ? "أحسنت! لقد ركزت على ما يهمك." : "انتهت الاستراحه، وقت المذاكرة!";
+        // Content intent:
+        // For study session: opens session alert screen
+        // For break: opens main timer screen
+        Intent contentIntent;
+        if (endedPhase == 0) {
+            contentIntent = alertIntent;
+        } else {
+            contentIntent = new Intent(this, MainActivity.class);
+            contentIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        }
+        PendingIntent contentPending = PendingIntent.getActivity(this, 101, contentIntent, piFlags);
+
+        // Action 1: Extra Time (+5 min) or Start Study
+        Intent action1Intent = new Intent(this, TimerService.class);
+        if (endedPhase == 0) {
+            action1Intent.setAction(ACTION_EXTRA_TIME);
+            action1Intent.putExtra("ended_phase", endedPhase);
+        } else {
+            action1Intent.setAction(ACTION_START_STUDY);
+        }
+        PendingIntent piAction1 = PendingIntent.getService(this, 102, action1Intent, piFlags);
+
+        // Action 2: Stop Alarm
+        Intent stopIntent = new Intent(this, TimerService.class);
+        stopIntent.setAction(ACTION_STOP_ALARM);
+        PendingIntent piStop = PendingIntent.getService(this, 103, stopIntent, piFlags);
+
+        // Exact texts from Notifications_System.md
+        String title;
+        String text;
+        String action1Text;
+        int action1Icon;
+        if (endedPhase == 0) {
+            title = "انتهت جلسة المذاكرة!";
+            text = "أحسنت! لقد أنهيت جلسة المذاكرة!";
+            action1Text = "وقت إضافي";
+            action1Icon = R.drawable.ic_clock_white;
+        } else if (endedPhase == 1) {
+            title = "انتهت الاستراحة القصيرة!";
+            text = "حان وقت العودة إلى المذاكرة!";
+            action1Text = "بدء المذاكرة";
+            action1Icon = R.drawable.ic_play;
+        } else {
+            title = "انتهت الاستراحة الطويلة!";
+            text = "انتهت استراحتك الطويلة، استعد لجلسة مذاكرة جديدة!";
+            action1Text = "بدء المذاكرة";
+            action1Icon = R.drawable.ic_play;
+        }
+
+        RemoteViews views = new RemoteViews(getPackageName(), R.layout.notification_completion);
+        views.setTextViewText(R.id.notif_comp_title, title);
+        views.setTextViewText(R.id.notif_comp_text, text);
+        views.setTextViewText(R.id.notif_comp_text1, action1Text);
+        views.setImageViewResource(R.id.notif_comp_icon1, action1Icon);
+        views.setTextViewText(R.id.notif_comp_text2, "إيقاف");
+        views.setImageViewResource(R.id.notif_comp_icon2, R.drawable.ic_close_white);
+
+        views.setOnClickPendingIntent(R.id.notif_comp_action1, piAction1);
+        views.setOnClickPendingIntent(R.id.notif_comp_action2, piStop);
+        views.setOnClickPendingIntent(R.id.notif_comp_title, contentPending);
+        views.setOnClickPendingIntent(R.id.notif_comp_text, contentPending);
+        views.setOnClickPendingIntent(R.id.notif_comp_root, contentPending);
 
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
@@ -246,14 +338,29 @@ public class TimerService extends Service {
         b.setSmallIcon(R.drawable.ic_focus_logo)
          .setContentTitle(title)
          .setContentText(text)
-         .setContentIntent(fullScreenPending)
+         .setContentIntent(contentPending)
          .setFullScreenIntent(fullScreenPending, true)
          .setAutoCancel(true)
-         .setPriority(Notification.PRIORITY_MAX);
+         .setOnlyAlertOnce(true);
 
         if (Build.VERSION.SDK_INT >= 21) {
+            b.setColor(0xFF5146D8);
             b.setCategory(Notification.CATEGORY_ALARM);
             b.setVisibility(Notification.VISIBILITY_PUBLIC);
+        }
+        if (Build.VERSION.SDK_INT >= 16) {
+            b.setPriority(Notification.PRIORITY_MAX);
+            b.setStyle(new Notification.BigTextStyle().bigText(text));
+            b.addAction(action1Icon, action1Text, piAction1);
+            b.addAction(R.drawable.ic_close_white, "إيقاف", piStop);
+        }
+
+        if (Build.VERSION.SDK_INT >= 24) {
+            b.setCustomContentView(views);
+            b.setCustomBigContentView(views);
+            b.setStyle(new Notification.DecoratedCustomViewStyle());
+        } else {
+            b.setContent(views);
         }
 
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -262,7 +369,10 @@ public class TimerService extends Service {
         }
 
         try {
-            startActivity(alertIntent);
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null && !pm.isInteractive()) {
+                startActivity(alertIntent);
+            }
         } catch (Exception ignored) {}
     }
 
@@ -513,52 +623,34 @@ public class TimerService extends Service {
     private void playAlarmForPhase(int endedPhase) {
         stopAmbientPlayback();
         stopAlarm();
-        try {
-            final int repeats = 1;
-            totalRepeats = repeats;
-            currentRepeat = 0;
+        handler.removeCallbacks(alarmTimeoutRunnable);
 
+        try {
             String soundKey = prefs != null ? prefs.getString("alert_sound_key", "sparkle") : "sparkle";
             int resId = rawResForSoundKey(soundKey);
             final float vol = prefs != null ? prefs.getFloat("alert_volume", 0.8f) : 0.8f;
 
             alarmPlayer = MediaPlayer.create(getApplicationContext(), resId);
             if (alarmPlayer == null) {
-                notifyAlertStopped();
+                stopAlarmOnly();
                 return;
             }
             alarmPlayer.setVolume(vol, vol);
-            alarmPlayer.setOnCompletionListener(mp -> {
-                currentRepeat++;
-                if (currentRepeat < totalRepeats) {
-                    try {
-                        mp.seekTo(0);
-                        mp.start();
-                    } catch (Exception e) {
-                        stopAlarmAndNotify();
-                    }
-                } else {
-                    stopAlarmAndNotify();
-                }
-            });
+            alarmPlayer.setOnCompletionListener(mp -> stopAlarmOnly());
             alarmPlayer.start();
+
+            // Maximum 1 minute alert sound duration as specified in Notifications_System.md
+            handler.postDelayed(alarmTimeoutRunnable, 60000L);
         } catch (Exception ignored) {
-            notifyAlertStopped();
+            stopAlarmOnly();
         }
     }
 
-    private void stopAlarmAndNotify() {
+    private void stopAlarmOnly() {
+        handler.removeCallbacks(alarmTimeoutRunnable);
         stopAlarm();
-        notifyAlertStopped();
-    }
-
-    private void notifyAlertStopped() {
         try {
             sendBroadcast(new Intent(ACTION_ALERT_STOPPED));
-        } catch (Exception ignored) {}
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.cancel(11);
         } catch (Exception ignored) {}
     }
 
@@ -631,10 +723,18 @@ public class TimerService extends Service {
         PendingIntent piToggle = PendingIntent.getService(this, 1, toggleIntent, piFlags);
 
         int phase = prefs != null ? prefs.getInt("phase", 0) : 0;
-        String phaseTitle = phaseName(phase);
+        String statusText;
+        if (phase == 0) {
+            statusText = isRunning ? "جلسة مذاكرة جارية" : "جلسة مذاكرة (متوقفة مؤقتاً)";
+        } else if (phase == 1) {
+            statusText = isRunning ? "استراحة قصيرة جارية" : "استراحة قصيرة (متوقفة مؤقتاً)";
+        } else {
+            statusText = isRunning ? "استراحة طويلة جارية" : "استراحة طويلة (متوقفة مؤقتاً)";
+        }
+        String headerTitle = "Focus • " + statusText;
 
         RemoteViews views = new RemoteViews(getPackageName(), R.layout.notification_timer);
-        views.setTextViewText(R.id.notif_phase_title, phaseTitle);
+        views.setTextViewText(R.id.notif_phase_title, headerTitle);
         views.setTextViewText(R.id.notif_countdown, countdownStr);
         views.setTextViewText(R.id.notif_action_text, isRunning ? "إيقاف مؤقت" : "متابعة");
         views.setImageViewResource(R.id.notif_action_icon, isRunning ? R.drawable.ic_pause : R.drawable.ic_play);
@@ -646,6 +746,7 @@ public class TimerService extends Service {
         views.setOnClickPendingIntent(R.id.notif_phase_title, piOpen);
         views.setOnClickPendingIntent(R.id.notif_countdown, piOpen);
         views.setOnClickPendingIntent(R.id.notif_logo, piOpen);
+        views.setOnClickPendingIntent(R.id.notif_root, piOpen);
 
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
@@ -655,11 +756,21 @@ public class TimerService extends Service {
         }
 
         b.setSmallIcon(R.drawable.ic_focus_logo)
-         .setContentTitle(phaseTitle)
+         .setContentTitle(headerTitle)
          .setContentText(countdownStr)
          .setContentIntent(piOpen)
          .setOngoing(isRunning)
          .setOnlyAlertOnce(true);
+
+        if (Build.VERSION.SDK_INT >= 21) {
+            b.setColor(0xFF5146D8);
+            b.setVisibility(Notification.VISIBILITY_PUBLIC);
+        }
+        if (Build.VERSION.SDK_INT >= 16) {
+            b.setPriority(Notification.PRIORITY_LOW);
+            b.addAction(isRunning ? R.drawable.ic_pause : R.drawable.ic_play,
+                        isRunning ? "إيقاف مؤقت" : "متابعة", piToggle);
+        }
 
         if (Build.VERSION.SDK_INT >= 24) {
             b.setCustomContentView(views);
@@ -679,9 +790,15 @@ public class TimerService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(alarmTimeoutRunnable);
         if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(ambientPrefsListener);
         stopAmbientPlayback();
         stopAlarm();
+        try {
+            stopForeground(true);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(10);
+        } catch (Exception ignored) {}
         releaseWake();
         super.onDestroy();
     }

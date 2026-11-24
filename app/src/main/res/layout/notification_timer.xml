@@ -5,31 +5,34 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="12dp"
-    android:background="@drawable/bg_notif_card">
+    android:background="@drawable/bg_notif_card"
+    android:layoutDirection="rtl">
 
     <TextView
         android:id="@+id/notif_phase_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="مذاكرة"
+        android:text="Focus • جلسة مذاكرة جارية"
         android:textColor="#E8E4FD"
-        android:textSize="15sp"
+        android:textSize="14sp"
         android:textStyle="bold" />
 
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="8dp"
+        android:layoutDirection="ltr">
 
         <TextView
             android:id="@+id/notif_countdown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
-            android:text="18:21"
+            android:text="24:59"
             android:textColor="#FFFFFF"
             android:textSize="32sp"
             android:textStyle="bold"
@@ -40,6 +43,7 @@
             android:layout_width="44dp"
             android:layout_height="44dp"
             android:layout_alignParentRight="true"
+            android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
             android:src="@drawable/ic_focus_logo" />
     </RelativeLayout>
@@ -61,7 +65,7 @@
             android:layout_width="16dp"
             android:layout_height="16dp"
             android:layout_marginLeft="8dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginStart="8dp"
             android:src="@drawable/ic_pause" />
 
         <TextView

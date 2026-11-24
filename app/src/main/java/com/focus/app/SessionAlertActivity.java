@@ -75,7 +75,7 @@ public class SessionAlertActivity extends Activity {
         buildUi();
 
         // Keep screen visible for 1 minute then dismiss automatically
-        handler.postDelayed(this::dismissScreen, 60000L);
+        handler.postDelayed(this::autoDismissOnTimeout, 60000L);
     }
 
     private int dp(float v) {
@@ -336,6 +336,15 @@ public class SessionAlertActivity extends Activity {
         main.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(main);
         dismissScreen();
+    }
+
+    private void autoDismissOnTimeout() {
+        if (isDismissed || isFinishing()) return;
+        isDismissed = true;
+        handler.removeCallbacksAndMessages(null);
+        // Turn off full-screen to allow display to sleep, but keep notification in status bar
+        finish();
+        overridePendingTransition(0, android.R.anim.fade_out);
     }
 
     private void dismissScreen() {

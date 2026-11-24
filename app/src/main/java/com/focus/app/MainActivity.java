@@ -517,6 +517,10 @@ public class MainActivity extends Activity {
         running = true;
         Intent i = new Intent(this, TimerService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(11);
+        } catch (Exception ignored) {}
         startButton.setText("إيقاف مؤقت");
         startTicker();
     }
