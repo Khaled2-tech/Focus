@@ -366,7 +366,7 @@ public class SettingsActivity extends Activity {
         ambHeader.addView(ambTitle);
 
         ImageView ambIcon = new ImageView(this);
-        ambIcon.setImageResource(R.drawable.rain);
+        ambIcon.setImageResource(R.drawable.ic_ambient);
         LinearLayout.LayoutParams aip = lp(24, 24);
         aip.leftMargin = dp(8);
         ambHeader.addView(ambIcon, aip);
