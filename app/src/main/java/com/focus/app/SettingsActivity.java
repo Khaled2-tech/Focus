@@ -462,19 +462,15 @@ public class SettingsActivity extends Activity {
         TextView selectedLabel = txt("محدد:", 14, "#C4B8FF", false);
         summaryBox.addView(selectedLabel);
 
-        ImageView currentIconView = new ImageView(this);
-        currentIconView.setImageResource(currentSoundIcon);
-        LinearLayout.LayoutParams civp = lp(24, 24);
-        civp.rightMargin = dp(8);
-        civp.leftMargin = dp(6);
-        summaryBox.addView(currentIconView, civp);
-
         TextView selectedNameView = txt(currentSoundName, 15, "#FFFFFF", true);
-        summaryBox.addView(selectedNameView, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams snvp = new LinearLayout.LayoutParams(0, -2, 1);
+        snvp.rightMargin = dp(10);
+        snvp.leftMargin = dp(14);
+        summaryBox.addView(selectedNameView, snvp);
 
         TextView changeBtn = txt("تغيير", 13, "#FFFFFF", true);
         changeBtn.setGravity(Gravity.CENTER);
-        changeBtn.setPadding(dp(14), dp(6), dp(14), dp(6));
+        changeBtn.setPadding(dp(16), dp(6), dp(16), dp(6));
         changeBtn.setBackground(rounded(Color.argb(70, 255, 255, 255), 14, 1));
         summaryBox.addView(changeBtn);
 
@@ -540,7 +536,6 @@ public class SettingsActivity extends Activity {
                 prefs.edit().putString("alert_sound_key", item.key)
                         .putString("alert_sound_name", item.name).apply();
                 selectedNameView.setText(item.name);
-                currentIconView.setImageResource(item.iconRes);
                 refreshSoundTiles.run();
                 playAlertPreview(item.rawRes);
             });

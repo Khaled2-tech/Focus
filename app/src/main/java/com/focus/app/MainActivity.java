@@ -1,6 +1,10 @@
 package com.focus.app;
 
 import android.app.Activity;
+import android.app.Dialog;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Window;
+import android.view.WindowManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -334,14 +338,15 @@ public class MainActivity extends Activity {
         LinearLayout panel = timerPanel;
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.setPadding(dp(16), dp(compact ? 12 : 16), dp(16), dp(compact ? 12 : 16));
+        panel.setPadding(dp(16), dp(compact ? 12 : 16), dp(16), dp(compact ? 14 : 18));
         panel.setBackground(glassCard(panel, 26));
         if (Build.VERSION.SDK_INT >= 21) {
             panel.setElevation(0);
             panel.setClipToOutline(true);
         }
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, 0, 1);
-        pp.topMargin = dp(8);
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, -2);
+        pp.topMargin = dp(6);
+        pp.bottomMargin = dp(6);
         page.addView(panel, pp);
 
         phaseText = label("جلسة مذاكرة", compact ? 14 : 15, "#2C2E7A");
@@ -352,16 +357,16 @@ public class MainActivity extends Activity {
         phaseText.setPadding(dp(22), 0, dp(22), 0);
         panel.addView(phaseText, new LinearLayout.LayoutParams(-2, dp(36)));
 
-        int reserved = dp(compact ? 250 : 280);
+        int reserved = dp(compact ? 240 : 270);
         int status = 0;
         int statusId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         if (statusId > 0) status = getResources().getDimensionPixelSize(statusId);
         int avail = dm.heightPixels - status - reserved;
-        int ringSize = Math.min(dp(compact ? 180 : 210), Math.min((int) (dm.widthPixels * 0.60f), Math.max(dp(140), avail)));
+        int ringSize = Math.min(dp(compact ? 165 : 190), Math.min((int) (dm.widthPixels * 0.58f), Math.max(dp(130), avail)));
         FrameLayout ringFrame = new FrameLayout(this);
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ringSize, ringSize);
-        rp.topMargin = dp(compact ? 8 : 14);
-        rp.bottomMargin = dp(compact ? 6 : 10);
+        rp.topMargin = dp(compact ? 6 : 12);
+        rp.bottomMargin = dp(compact ? 6 : 8);
         panel.addView(ringFrame, rp);
         timerRing = new TimerRing(this);
         ringFrame.addView(timerRing, new FrameLayout.LayoutParams(-1, -1));
@@ -380,8 +385,8 @@ public class MainActivity extends Activity {
 
         startButton = pill("ابدأ", true);
         startButton.setTextSize(compact ? 16 : 18);
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(compact ? 48 : 52));
-        sp.topMargin = dp(compact ? 12 : 16);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(compact ? 46 : 50));
+        sp.topMargin = dp(compact ? 10 : 14);
         sp.leftMargin = dp(14);
         sp.rightMargin = dp(14);
         panel.addView(startButton, sp);
@@ -390,12 +395,14 @@ public class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         controls.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        String[] names = {"+ وقت اضافي", "تخطّي", "إنهاء"};
+        String[] names = {"وقت إضافي", "تخطّي", "إنهاء"};
         for (String n : names) {
             Button x = pill(n, false);
             x.setTypeface(cairoMedium);
+            x.setTextSize(compact ? 12 : 13);
+            x.setSingleLine(true);
             LinearLayout.LayoutParams xp = new LinearLayout.LayoutParams(0, dp(compact ? 42 : 46), 1);
-            xp.setMargins(dp(4), dp(10), dp(4), 0);
+            xp.setMargins(dp(3), 0, dp(3), 0);
             controls.addView(x, xp);
             x.setOnClickListener(v -> {
                 if (n.contains("وقت")) addFiveMinutes();
@@ -403,7 +410,42 @@ public class MainActivity extends Activity {
                 else finishPeriod();
             });
         }
-        panel.addView(controls, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+        cp.topMargin = dp(compact ? 10 : 14);
+        cp.bottomMargin = dp(compact ? 8 : 10);
+        panel.addView(controls, cp);
+
+        // Footer row containing the rotate_cw reset button at bottom right (RTL start)
+        LinearLayout footerRow = new LinearLayout(this);
+        footerRow.setOrientation(LinearLayout.HORIZONTAL);
+        footerRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        footerRow.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2);
+        fp.topMargin = dp(compact ? 2 : 4);
+        fp.bottomMargin = dp(compact ? 2 : 4);
+        fp.rightMargin = dp(6);
+        fp.leftMargin = dp(6);
+
+        FrameLayout resetBtn = new FrameLayout(this);
+        GradientDrawable resetBg = new GradientDrawable();
+        resetBg.setShape(GradientDrawable.OVAL);
+        resetBg.setColor(Color.argb(compact ? 210 : 190, 255, 255, 255));
+        resetBg.setStroke(dp(1), Color.argb(180, 255, 255, 255));
+        resetBtn.setBackground(resetBg);
+        if (Build.VERSION.SDK_INT >= 21) resetBtn.setElevation(dp(1));
+
+        ImageView resetIcon = new ImageView(this);
+        resetIcon.setImageResource(R.drawable.rotate_cw);
+        resetIcon.setColorFilter(Color.parseColor("#5146D8"));
+        FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(dp(18), dp(18));
+        rlp.gravity = Gravity.CENTER;
+        resetBtn.addView(resetIcon, rlp);
+
+        LinearLayout.LayoutParams rbp = new LinearLayout.LayoutParams(dp(36), dp(36));
+        footerRow.addView(resetBtn, rbp);
+        panel.addView(footerRow, fp);
+
+        resetBtn.setOnClickListener(v -> showResetConfirmationDialog());
 
         sessionsCard = new LinearLayout(this);
         LinearLayout bottom = sessionsCard;
@@ -518,6 +560,141 @@ public class MainActivity extends Activity {
         }
         sync();
     }
+    private void showResetConfirmationDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(22), dp(22), dp(22), dp(20));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setColor(Color.argb(245, 24, 18, 48));
+        bg.setCornerRadius(dp(24));
+        bg.setStroke(dp(1.5f), Color.argb(120, 142, 117, 232));
+        root.setBackground(bg);
+
+        // Circular badge with rotate_cw icon
+        FrameLayout iconBadge = new FrameLayout(this);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.OVAL);
+        badgeBg.setColor(Color.parseColor("#4B34A2"));
+        badgeBg.setStroke(dp(1.5f), Color.parseColor("#8C70E6"));
+        iconBadge.setBackground(badgeBg);
+
+        ImageView dialogIcon = new ImageView(this);
+        dialogIcon.setImageResource(R.drawable.rotate_cw);
+        dialogIcon.setColorFilter(Color.WHITE);
+        FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(dp(22), dp(22));
+        dlp.gravity = Gravity.CENTER;
+        iconBadge.addView(dialogIcon, dlp);
+
+        LinearLayout.LayoutParams ibp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        ibp.bottomMargin = dp(14);
+        root.addView(iconBadge, ibp);
+
+        // Confirmation question
+        TextView msg = new TextView(this);
+        msg.setText("هل تود إعادة ضبط المؤقت الحالي؟");
+        msg.setTextColor(Color.WHITE);
+        msg.setTextSize(16);
+        msg.setTypeface(cairoSemi);
+        msg.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-2, -2);
+        mlp.bottomMargin = dp(20);
+        root.addView(msg, mlp);
+
+        // Action buttons row
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        buttons.setGravity(Gravity.CENTER);
+
+        // Reset button
+        Button confirmBtn = new Button(this);
+        confirmBtn.setText("إعادة الضبط");
+        confirmBtn.setAllCaps(false);
+        confirmBtn.setTextSize(14);
+        confirmBtn.setTypeface(cairoSemi);
+        confirmBtn.setTextColor(Color.WHITE);
+        confirmBtn.setIncludeFontPadding(false);
+        GradientDrawable confirmBg = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.parseColor("#6A45F8"), Color.parseColor("#4D36D6")}
+        );
+        confirmBg.setCornerRadius(dp(20));
+        confirmBtn.setBackground(confirmBg);
+        confirmBtn.setMinHeight(0);
+        confirmBtn.setMinimumHeight(0);
+        confirmBtn.setPadding(dp(12), 0, dp(12), 0);
+        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(0, dp(44), 1);
+        cbp.setMargins(dp(4), 0, dp(4), 0);
+        buttons.addView(confirmBtn, cbp);
+
+        // Cancel button
+        Button cancelBtn = new Button(this);
+        cancelBtn.setText("إلغاء");
+        cancelBtn.setAllCaps(false);
+        cancelBtn.setTextSize(14);
+        cancelBtn.setTypeface(cairoMedium);
+        cancelBtn.setTextColor(Color.parseColor("#E0DAF5"));
+        cancelBtn.setIncludeFontPadding(false);
+        GradientDrawable cancelBg = new GradientDrawable();
+        cancelBg.setColor(Color.argb(70, 255, 255, 255));
+        cancelBg.setCornerRadius(dp(20));
+        cancelBg.setStroke(dp(1), Color.argb(120, 255, 255, 255));
+        cancelBtn.setBackground(cancelBg);
+        cancelBtn.setMinHeight(0);
+        cancelBtn.setMinimumHeight(0);
+        cancelBtn.setPadding(dp(12), 0, dp(12), 0);
+        LinearLayout.LayoutParams canp = new LinearLayout.LayoutParams(0, dp(44), 1);
+        canp.setMargins(dp(4), 0, dp(4), 0);
+        buttons.addView(cancelBtn, canp);
+
+        root.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        confirmBtn.setOnClickListener(v -> {
+            performTimerReset();
+            dialog.dismiss();
+        });
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            int dialogWidth = Math.min(dp(320), (int) (getResources().getDisplayMetrics().widthPixels * 0.88f));
+            dialog.getWindow().setLayout(dialogWidth, WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+        dialog.show();
+    }
+
+    private void performTimerReset() {
+        stopCurrent();
+        try {
+            TimerService.stopAlarmNow(this);
+        } catch (Exception ignored) {}
+        long d = durationFor(phase);
+        if (prefs != null) {
+            prefs.edit()
+                    .putInt("completed_sessions", 0)
+                    .putLong("remaining_ms", d)
+                    .putLong("session_duration_ms", d)
+                    .putBoolean("running", false)
+                    .putLong("end_at", 0)
+                    .apply();
+        }
+        running = false;
+        if (timerRing != null) {
+            timerRing.animateToFraction(1.0f, 400, new DecelerateInterpolator());
+        }
+        sync();
+    }
+
     private void stopCurrent() {
         if (running) {
             prefs.edit().putBoolean("running", false).apply();

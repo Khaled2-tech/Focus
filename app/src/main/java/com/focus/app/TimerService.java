@@ -57,7 +57,11 @@ public class TimerService extends Service {
                 return;
             }
             long left = prefs.getLong("end_at", 0L) - System.currentTimeMillis();
+            if (left <= 1000L) {
+                stopAmbientPlayback();
+            }
             if (left <= 0) {
+                stopAmbientPlayback();
                 finishSession();
                 return;
             }
@@ -376,7 +380,10 @@ public class TimerService extends Service {
         handler.removeCallbacks(ambientStopRunnable);
         if (ambientPlayer != null) {
             try {
-                if (ambientPlayer.isPlaying()) ambientPlayer.stop();
+                ambientPlayer.setVolume(0f, 0f);
+                if (ambientPlayer.isPlaying()) ambientPlayer.pause();
+                ambientPlayer.stop();
+                ambientPlayer.reset();
                 ambientPlayer.release();
             } catch (Exception ignored) {}
             ambientPlayer = null;
@@ -385,9 +392,10 @@ public class TimerService extends Service {
     }
 
     private void playAlarmForPhase(int endedPhase) {
+        stopAmbientPlayback();
         stopAlarm();
         try {
-            final int repeats = (endedPhase == 0) ? 1 : 3;
+            final int repeats = 1;
             totalRepeats = repeats;
             currentRepeat = 0;
 

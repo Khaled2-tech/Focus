@@ -32,9 +32,7 @@ public class SessionAlertActivity extends Activity {
     private final BroadcastReceiver stopReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (TimerService.ACTION_ALERT_STOPPED.equals(intent.getAction())) {
-                dismissScreen();
-            }
+            // Keep screen visible for the full 1 minute duration even after sound completes
         }
     };
 
@@ -76,8 +74,8 @@ public class SessionAlertActivity extends Activity {
 
         buildUi();
 
-        // Fallback safety timeout in case sound doesn't trigger or finishes
-        handler.postDelayed(this::dismissScreen, 25000L);
+        // Keep screen visible for 1 minute then dismiss automatically
+        handler.postDelayed(this::dismissScreen, 60000L);
     }
 
     private int dp(float v) {
@@ -344,6 +342,10 @@ public class SessionAlertActivity extends Activity {
         if (isDismissed || isFinishing()) return;
         isDismissed = true;
         handler.removeCallbacksAndMessages(null);
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(11);
+        } catch (Exception ignored) {}
         finish();
         overridePendingTransition(0, android.R.anim.fade_out);
     }
