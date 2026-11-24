@@ -35,7 +35,7 @@ public class TimerService extends Service {
     private SharedPreferences prefs;
     private PowerManager.WakeLock wakeLock;
     private MediaPlayer alarmPlayer;
-    private MediaPlayer ambientPlayer;
+    private SeamlessAmbientPlayer ambientPlayer;
     private String activeAmbientKey;
 
     private final Runnable ambientStopRunnable = this::stopAmbientPlayback;
@@ -337,36 +337,24 @@ public class TimerService extends Service {
             return;
         }
 
-        if (ambientPlayer == null || !key.equals(activeAmbientKey)) {
-            stopAmbientPlayback();
-            try {
-                ambientPlayer = MediaPlayer.create(getApplicationContext(), rawRes);
-                if (ambientPlayer == null) return;
-                activeAmbientKey = key;
-                ambientPlayer.setLooping(true);
-                float volume = prefs.getFloat("ambient_volume", 0.70f);
-                ambientPlayer.setVolume(volume, volume);
-                ambientPlayer.start();
-            } catch (Exception ignored) {
-                stopAmbientPlayback();
-                return;
-            }
+        if (ambientPlayer == null) {
+            ambientPlayer = new SeamlessAmbientPlayer(this);
+        }
+
+        if (!key.equals(activeAmbientKey) || !ambientPlayer.isPlaying()) {
+            activeAmbientKey = key;
+            float volume = prefs.getFloat("ambient_volume", 0.70f);
+            ambientPlayer.play(rawRes, volume);
         } else {
-            try {
-                float volume = prefs.getFloat("ambient_volume", 0.70f);
-                ambientPlayer.setVolume(volume, volume);
-                if (!ambientPlayer.isPlaying()) ambientPlayer.start();
-            } catch (Exception ignored) {
-                stopAmbientPlayback();
-                return;
-            }
+            float volume = prefs.getFloat("ambient_volume", 0.70f);
+            ambientPlayer.setVolume(volume);
         }
         scheduleAmbientStop();
     }
 
     private void scheduleAmbientStop() {
         handler.removeCallbacks(ambientStopRunnable);
-        if (prefs == null || ambientPlayer == null) return;
+        if (prefs == null || ambientPlayer == null || !ambientPlayer.isPlaying()) return;
         long stopAt = prefs.getLong("end_at", 0L) - 1000L;
         long delay = stopAt - System.currentTimeMillis();
         if (delay <= 0) {
@@ -379,16 +367,147 @@ public class TimerService extends Service {
     private void stopAmbientPlayback() {
         handler.removeCallbacks(ambientStopRunnable);
         if (ambientPlayer != null) {
-            try {
-                ambientPlayer.setVolume(0f, 0f);
-                if (ambientPlayer.isPlaying()) ambientPlayer.pause();
-                ambientPlayer.stop();
-                ambientPlayer.reset();
-                ambientPlayer.release();
-            } catch (Exception ignored) {}
+            ambientPlayer.stop();
             ambientPlayer = null;
         }
         activeAmbientKey = null;
+    }
+
+    /**
+     * SeamlessAmbientPlayer maintains two alternating MediaPlayer instances.
+     * Before the active track finishes, the second player is started at 0 offset,
+     * cross-overlapping by ~700ms to eliminate any pause or silence gap during looping.
+     */
+    private static class SeamlessAmbientPlayer {
+        private final Context context;
+        private final Handler handler = new Handler();
+        private int rawRes;
+        private float volume = 0.70f;
+        private boolean isPlaying = false;
+
+        private MediaPlayer playerA;
+        private MediaPlayer playerB;
+        private boolean isCurrentA = true;
+        private int trackDuration = 0;
+
+        private final Runnable loopTransitionRunnable = this::onLoopHandoff;
+        private final Runnable stopPrevRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!isPlaying) return;
+                MediaPlayer prev = isCurrentA ? playerB : playerA;
+                if (prev != null) {
+                    try {
+                        if (prev.isPlaying()) prev.pause();
+                        prev.seekTo(0);
+                    } catch (Exception ignored) {}
+                }
+            }
+        };
+
+        public SeamlessAmbientPlayer(Context context) {
+            this.context = context.getApplicationContext();
+        }
+
+        public synchronized void play(int resId, float vol) {
+            stop();
+            this.rawRes = resId;
+            this.volume = vol;
+            try {
+                playerA = MediaPlayer.create(context, rawRes);
+                if (playerA == null) return;
+                trackDuration = playerA.getDuration();
+                playerA.setVolume(volume, volume);
+
+                try {
+                    playerB = MediaPlayer.create(context, rawRes);
+                    if (playerB != null) {
+                        playerB.setVolume(volume, volume);
+                    }
+                } catch (Exception ignored) {
+                    playerB = null;
+                }
+
+                if (playerB == null || trackDuration <= 1500) {
+                    playerA.setLooping(true);
+                }
+
+                isCurrentA = true;
+                isPlaying = true;
+                playerA.start();
+                scheduleNextHandoff(trackDuration - 700);
+            } catch (Exception ignored) {
+                stop();
+            }
+        }
+
+        public synchronized void setVolume(float vol) {
+            this.volume = vol;
+            if (playerA != null) {
+                try { playerA.setVolume(vol, vol); } catch (Exception ignored) {}
+            }
+            if (playerB != null) {
+                try { playerB.setVolume(vol, vol); } catch (Exception ignored) {}
+            }
+        }
+
+        private void scheduleNextHandoff(long delayMs) {
+            handler.removeCallbacks(loopTransitionRunnable);
+            if (!isPlaying || playerB == null || trackDuration <= 1500) return;
+            long delay = Math.max(200, delayMs);
+            handler.postDelayed(loopTransitionRunnable, delay);
+        }
+
+        private void onLoopHandoff() {
+            if (!isPlaying) return;
+            try {
+                MediaPlayer next = isCurrentA ? playerB : playerA;
+                if (next != null) {
+                    next.seekTo(0);
+                    next.setVolume(volume, volume);
+                    next.start();
+                }
+
+                isCurrentA = !isCurrentA;
+
+                handler.removeCallbacks(stopPrevRunnable);
+                handler.postDelayed(stopPrevRunnable, 750);
+
+                scheduleNextHandoff(trackDuration - 700);
+            } catch (Exception ignored) {}
+        }
+
+        public synchronized void stop() {
+            isPlaying = false;
+            handler.removeCallbacks(loopTransitionRunnable);
+            handler.removeCallbacks(stopPrevRunnable);
+            if (playerA != null) {
+                try {
+                    playerA.setVolume(0f, 0f);
+                    if (playerA.isPlaying()) playerA.pause();
+                    playerA.stop();
+                    playerA.reset();
+                    playerA.release();
+                } catch (Exception ignored) {}
+                playerA = null;
+            }
+            if (playerB != null) {
+                try {
+                    playerB.setVolume(0f, 0f);
+                    if (playerB.isPlaying()) playerB.pause();
+                    playerB.stop();
+                    playerB.reset();
+                    playerB.release();
+                } catch (Exception ignored) {}
+                playerB = null;
+            }
+            trackDuration = 0;
+        }
+
+        public synchronized boolean isPlaying() {
+            MediaPlayer cur = isCurrentA ? playerA : playerB;
+            return isPlaying && cur != null && cur.isPlaying();
+        }
     }
 
     private void playAlarmForPhase(int endedPhase) {
