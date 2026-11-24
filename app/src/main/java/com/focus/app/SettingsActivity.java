@@ -148,11 +148,10 @@ public class SettingsActivity extends Activity {
         return d;
     }
 
-    private GradientDrawable roundedPart(int color, boolean isRight) {
+    private GradientDrawable roundedPart(int color, float r, boolean isLeft) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
-        float r = dp(14);
-        if (isRight) {
+        if (isLeft) {
             d.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
         } else {
             d.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
@@ -324,13 +323,15 @@ public class SettingsActivity extends Activity {
         LinearLayout durations = card(page);
         sectionTitle(durations, "مدة الفترات", R.drawable.ic_clock);
         LinearLayout r1 = horizontal();
-        r1.addView(fieldColumn("مدة المذاكرة", "study_minutes", 25, R.drawable.ic_book_open, true), new LinearLayout.LayoutParams(0, -2, 1));
-        r1.addView(fieldColumn("مدة الاستراحة القصيرة", "short_minutes", 5, R.drawable.ic_coffee, true), new LinearLayout.LayoutParams(0, -2, 1));
+        r1.addView(fieldColumn("مدة المذاكرة", "study_minutes", 25, R.drawable.ic_book_open, "دقائق"), new LinearLayout.LayoutParams(0, -2, 1));
+        r1.addView(fieldColumn("مدة الاستراحة القصيرة", "short_minutes", 5, R.drawable.ic_coffee, "دقائق"), new LinearLayout.LayoutParams(0, -2, 1));
         durations.addView(r1);
         LinearLayout r2 = horizontal();
-        r2.addView(fieldColumn("عدد جلسات المذاكرة\nقبل الاستراحة الطويلة", "long_after", 4, R.drawable.ic_sessions_cycle, false), new LinearLayout.LayoutParams(0, -2, 1));
-        r2.addView(fieldColumn("مدة الاستراحة الطويلة", "long_minutes", 15, R.drawable.ic_bed, true), new LinearLayout.LayoutParams(0, -2, 1));
-        durations.addView(r2);
+        LinearLayout.LayoutParams r2Lp = lp(-1, -2);
+        r2Lp.topMargin = dp(8);
+        r2.addView(fieldColumn("عدد جلسات المذاكرة\nقبل الاستراحة الطويلة", "long_after", 4, R.drawable.ic_sessions_cycle, "جلسات"), new LinearLayout.LayoutParams(0, -2, 1));
+        r2.addView(fieldColumn("مدة الاستراحة الطويلة", "long_minutes", 15, R.drawable.ic_bed, "دقائق"), new LinearLayout.LayoutParams(0, -2, 1));
+        durations.addView(r2, r2Lp);
 
         // 2. الانتقال التلقائي
         LinearLayout auto = card(page);
@@ -683,7 +684,7 @@ public class SettingsActivity extends Activity {
         parent.addView(row, rp);
     }
 
-    private LinearLayout fieldColumn(String title, String key, int def, int icon, boolean showMin) {
+    private LinearLayout fieldColumn(String title, String key, int def, int icon, String unitLabel) {
         LinearLayout col = vertical();
         col.setPadding(dp(4), dp(4), dp(4), dp(4));
         LinearLayout titleRow = horizontal();
@@ -707,7 +708,7 @@ public class SettingsActivity extends Activity {
         int initial = prefs.getInt(key, def);
         EditText e = new EditText(this);
         e.setText(String.valueOf(initial));
-        e.setTextSize(compact ? 20 : 22);
+        e.setTextSize(compact ? 18 : 20);
         e.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         e.setTextColor(Color.WHITE);
         e.setGravity(Gravity.CENTER);
@@ -720,27 +721,49 @@ public class SettingsActivity extends Activity {
         else if (key.equals("long_minutes")) longBreak = e;
         else cycle = e;
 
+        int pillH = dp(compact ? 44 : 48);
+        float pillR = pillH / 2.0f;
+        int borderColor = Color.parseColor("#7A7DA6");
+        int leftColor = Color.parseColor("#5A5C8E");
+        int rightColor = Color.parseColor("#3F4773");
+
         LinearLayout split = horizontal();
         split.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        split.setBackground(rounded(c("#5146D8"), 14, 0));
+        split.setGravity(Gravity.CENTER_VERTICAL);
 
-        if (showMin) {
-            TextView minLabel = txt("دقيقة", 13, "#FFFFFF", false);
-            minLabel.setGravity(Gravity.CENTER);
-            minLabel.setBackground(roundedPart(Color.argb(90, 0, 0, 0), false));
-            split.addView(minLabel, lp(42, 48));
+        GradientDrawable outerBg = new GradientDrawable();
+        outerBg.setCornerRadius(pillR);
+        outerBg.setColor(Color.TRANSPARENT);
+        outerBg.setStroke(dp(1), borderColor);
+        split.setBackground(outerBg);
+        split.setPadding(dp(1), dp(1), dp(1), dp(1));
 
-            FrameLayout inputWrap = new FrameLayout(this);
-            inputWrap.setBackground(roundedPart(Color.argb(45, 255, 255, 255), true));
-            inputWrap.addView(e, new FrameLayout.LayoutParams(-1, -1));
-            split.addView(inputWrap, new LinearLayout.LayoutParams(0, dp(48), 1));
-        } else {
-            FrameLayout inputWrap = new FrameLayout(this);
-            inputWrap.addView(e, new FrameLayout.LayoutParams(-1, -1));
-            split.addView(inputWrap, lp(-1, 48));
-        }
+        float innerR = Math.max(0, pillR - dp(1));
 
-        col.addView(split, lp(-1, 48));
+        // 1. Left half (label: دقائق / جلسات)
+        FrameLayout leftWrap = new FrameLayout(this);
+        leftWrap.setBackground(roundedPart(leftColor, innerR, true));
+        TextView unitView = txt(unitLabel != null ? unitLabel : "دقائق", compact ? 13 : 14, "#FFFFFF", false);
+        unitView.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams utLp = new FrameLayout.LayoutParams(-1, -1);
+        utLp.gravity = Gravity.CENTER;
+        leftWrap.addView(unitView, utLp);
+        split.addView(leftWrap, new LinearLayout.LayoutParams(0, -1, 1f));
+
+        // 2. Vertical Divider line
+        View divider = new View(this);
+        divider.setBackgroundColor(borderColor);
+        split.addView(divider, new LinearLayout.LayoutParams(dp(1), -1));
+
+        // 3. Right half (input number)
+        FrameLayout rightWrap = new FrameLayout(this);
+        rightWrap.setBackground(roundedPart(rightColor, innerR, false));
+        FrameLayout.LayoutParams eLp = new FrameLayout.LayoutParams(-1, -1);
+        eLp.gravity = Gravity.CENTER;
+        rightWrap.addView(e, eLp);
+        split.addView(rightWrap, new LinearLayout.LayoutParams(0, -1, 1f));
+
+        col.addView(split, lp(-1, compact ? 44 : 48));
 
         e.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
