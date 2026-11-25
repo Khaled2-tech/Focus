@@ -442,9 +442,6 @@ public class SettingsActivity extends Activity {
         LinearLayout alertCard = card(page);
         sectionTitle(alertCard, "صوت التنبيه", R.drawable.ic_bell);
 
-        TextView alertDesc = txt("يعمل عند انتهاء فترة المؤقت. اضغط للمعاينة.", 13, "#C4B8FF", false);
-        alertDesc.setGravity(Gravity.RIGHT);
-        alertCard.addView(alertDesc, lp(-1, -2));
 
         String currentSoundKey = prefs.getString("alert_sound_key", "sparkle");
         String currentSoundName = nameForSoundKey(currentSoundKey);
