@@ -16,10 +16,11 @@
         android:layoutDirection="rtl">
 
         <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_marginLeft="6dp"
             android:layout_marginStart="6dp"
+            android:scaleType="fitCenter"
             android:src="@drawable/ic_focus_logo" />
 
         <TextView

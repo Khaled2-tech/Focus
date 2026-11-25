@@ -8,6 +8,9 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.os.Build;
@@ -343,14 +346,23 @@ public class TimerService extends Service {
          .setAutoCancel(true)
          .setOnlyAlertOnce(true);
 
+        try {
+            Bitmap logoBmp = BitmapFactory.decodeResource(getResources(), R.drawable.ic_focus_logo);
+            if (logoBmp != null) {
+                if (Build.VERSION.SDK_INT >= 23) {
+                    b.setLargeIcon(Icon.createWithBitmap(logoBmp));
+                } else {
+                    b.setLargeIcon(logoBmp);
+                }
+            }
+        } catch (Exception ignored) {}
+
         if (Build.VERSION.SDK_INT >= 21) {
-            b.setColor(0xFF5146D8);
             b.setCategory(Notification.CATEGORY_ALARM);
             b.setVisibility(Notification.VISIBILITY_PUBLIC);
         }
         if (Build.VERSION.SDK_INT >= 16) {
             b.setPriority(Notification.PRIORITY_MAX);
-            b.setStyle(new Notification.BigTextStyle().bigText(text));
             b.addAction(action1Icon, action1Text, piAction1);
             b.addAction(R.drawable.ic_close_white, "إيقاف", piStop);
         }
@@ -358,7 +370,6 @@ public class TimerService extends Service {
         if (Build.VERSION.SDK_INT >= 24) {
             b.setCustomContentView(views);
             b.setCustomBigContentView(views);
-            b.setStyle(new Notification.DecoratedCustomViewStyle());
         } else {
             b.setContent(views);
         }
@@ -762,8 +773,18 @@ public class TimerService extends Service {
          .setOngoing(isRunning)
          .setOnlyAlertOnce(true);
 
+        try {
+            Bitmap logoBmp = BitmapFactory.decodeResource(getResources(), R.drawable.ic_focus_logo);
+            if (logoBmp != null) {
+                if (Build.VERSION.SDK_INT >= 23) {
+                    b.setLargeIcon(Icon.createWithBitmap(logoBmp));
+                } else {
+                    b.setLargeIcon(logoBmp);
+                }
+            }
+        } catch (Exception ignored) {}
+
         if (Build.VERSION.SDK_INT >= 21) {
-            b.setColor(0xFF5146D8);
             b.setVisibility(Notification.VISIBILITY_PUBLIC);
         }
         if (Build.VERSION.SDK_INT >= 16) {
@@ -775,7 +796,6 @@ public class TimerService extends Service {
         if (Build.VERSION.SDK_INT >= 24) {
             b.setCustomContentView(views);
             b.setCustomBigContentView(views);
-            b.setStyle(new Notification.DecoratedCustomViewStyle());
         } else {
             b.setContent(views);
         }

@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     };
     private LinearLayout progressDots;
     private LinearLayout timerPanel;
+    private TextView brandText;
+    private ImageView settingsBtn;
     private LinearLayout sessionsCard;
     private Bitmap blurredWallpaper;
     private int blurGeneration;
@@ -224,6 +226,23 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    private void applyTopBarContrast(int topColor) {
+        if (brandText == null && settingsBtn == null) return;
+        boolean light = brightness(topColor) > 0.55;
+        int color = light ? Color.parseColor("#15102A") : Color.WHITE;
+        if (brandText != null) {
+            brandText.setTextColor(color);
+            if (light) {
+                brandText.setShadowLayer(dp(1.5f), 0, dp(1), Color.argb(35, 255, 255, 255));
+            } else {
+                brandText.setShadowLayer(dp(2.5f), 0, dp(1), Color.argb(130, 0, 0, 0));
+            }
+        }
+        if (settingsBtn != null) {
+            settingsBtn.setColorFilter(color);
+        }
+    }
+
     private void loadWallpaper() {
         if (wallpaper == null || prefs == null) return;
         String custom = prefs.getString("custom_background_uri", null);
@@ -240,6 +259,7 @@ public class MainActivity extends Activity {
                         wallpaper.setImageBitmap(bitmap);
                         prepareBlur(bitmap);
                         int color = topAverage(bitmap);
+                        applyTopBarContrast(color);
                         if (Build.VERSION.SDK_INT >= 21) {
                             getWindow().setStatusBarColor(color);
                             getWindow().setNavigationBarColor(darken(color, .78f));
@@ -325,16 +345,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams logop = new LinearLayout.LayoutParams(dp(compact ? 28 : 34), dp(compact ? 28 : 34));
         logop.rightMargin = dp(8);
         brand.addView(logo, logop);
-        TextView brandText = label("Focus", compact ? 22 : 25, "#2C2E7A");
+        brandText = label("Focus", compact ? 22 : 25, "#FFFFFF");
         brandText.setTypeface(jakartaBold);
         brand.addView(brandText);
         header.addView(brand, new LinearLayout.LayoutParams(0, dp(44), 1));
-        ImageView settings = new ImageView(this);
-        settings.setImageResource(R.drawable.ic_settings);
-        settings.setPadding(dp(8), dp(8), dp(8), dp(8));
-        settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
-        header.addView(settings, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        settingsBtn = new ImageView(this);
+        settingsBtn.setImageResource(R.drawable.ic_settings);
+        settingsBtn.setPadding(dp(8), dp(8), dp(8), dp(8));
+        settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        header.addView(settingsBtn, new LinearLayout.LayoutParams(dp(48), dp(48)));
         page.addView(header);
+        applyTopBarContrast(Color.parseColor("#140F27"));
 
         timerPanel = new LinearLayout(this);
         LinearLayout panel = timerPanel;

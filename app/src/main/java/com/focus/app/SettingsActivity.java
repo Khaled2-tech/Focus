@@ -8,6 +8,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -457,14 +458,20 @@ public class SettingsActivity extends Activity {
         sbp.topMargin = dp(10);
         alertCard.addView(summaryBox, sbp);
 
-        TextView selectedLabel = txt("محدد:", 14, "#C4B8FF", false);
-        summaryBox.addView(selectedLabel);
+        LinearLayout selectedGroup = horizontal();
+        selectedGroup.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        selectedGroup.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView selectedLabel = txt("محدد :", 14, "#C4B8FF", false);
+        selectedGroup.addView(selectedLabel);
 
         TextView selectedNameView = txt(currentSoundName, 15, "#FFFFFF", true);
-        LinearLayout.LayoutParams snvp = new LinearLayout.LayoutParams(0, -2, 1);
-        snvp.rightMargin = dp(10);
-        snvp.leftMargin = dp(14);
-        summaryBox.addView(selectedNameView, snvp);
+        LinearLayout.LayoutParams snvp = new LinearLayout.LayoutParams(-2, -2);
+        snvp.rightMargin = dp(8);
+        snvp.leftMargin = dp(8);
+        selectedGroup.addView(selectedNameView, snvp);
+
+        summaryBox.addView(selectedGroup, new LinearLayout.LayoutParams(0, -2, 1));
 
         TextView changeBtn = txt("تغيير", 13, "#FFFFFF", true);
         changeBtn.setGravity(Gravity.CENTER);
@@ -779,20 +786,46 @@ public class SettingsActivity extends Activity {
         LinearLayout row = horizontal();
         row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         row.setGravity(Gravity.CENTER_VERTICAL);
+
         Switch sw = new Switch(this);
         sw.setChecked(prefs.getBoolean(key, true));
-        int purple = c("#5146D8");
-        int trackColor = Color.argb(120, 81, 70, 216);
+
+        int trackW = dp(48);
+        int trackH = dp(28);
+        int thumbSize = dp(22);
+
+        StateListDrawable trackList = new StateListDrawable();
+
+        GradientDrawable trackOn = new GradientDrawable();
+        trackOn.setShape(GradientDrawable.RECTANGLE);
+        trackOn.setCornerRadius(trackH / 2f);
+        trackOn.setColor(Color.parseColor("#4F46E5")); // Rich purple matching Turn On-Off.png
+        trackOn.setSize(trackW, trackH);
+
+        GradientDrawable trackOff = new GradientDrawable();
+        trackOff.setShape(GradientDrawable.RECTANGLE);
+        trackOff.setCornerRadius(trackH / 2f);
+        trackOff.setColor(Color.argb(75, 255, 255, 255)); // Glass translucent track when off
+        trackOff.setSize(trackW, trackH);
+
+        trackList.addState(new int[]{android.R.attr.state_checked}, trackOn);
+        trackList.addState(new int[]{}, trackOff);
+
+        GradientDrawable thumb = new GradientDrawable();
+        thumb.setShape(GradientDrawable.OVAL);
+        thumb.setColor(Color.WHITE); // Solid white circle
+        thumb.setSize(thumbSize, thumbSize);
+
+        sw.setTrackDrawable(trackList);
+        sw.setThumbDrawable(thumb);
+        sw.setSwitchMinWidth(trackW);
+        sw.setShowText(false);
+
         if (Build.VERSION.SDK_INT >= 23) {
-            int[][] states = new int[][]{
-                    new int[]{android.R.attr.state_checked},
-                    new int[]{}
-            };
-            int[] thumbColors = new int[]{purple, Color.parseColor("#E0E0E0")};
-            int[] trackColors = new int[]{trackColor, Color.argb(90, 255, 255, 255)};
-            sw.setThumbTintList(new ColorStateList(states, thumbColors));
-            sw.setTrackTintList(new ColorStateList(states, trackColors));
+            sw.setThumbTintList(null);
+            sw.setTrackTintList(null);
         }
+
         row.addView(sw);
         View spacer = new View(this);
         row.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1));
@@ -800,7 +833,7 @@ public class SettingsActivity extends Activity {
         t.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         row.addView(t);
         sw.setOnCheckedChangeListener((v, checked) -> prefs.edit().putBoolean(key, checked).apply());
-        parent.addView(row, lp(-1, 44));
+        parent.addView(row, lp(-1, 46));
     }
 
     private void renderThemes() {

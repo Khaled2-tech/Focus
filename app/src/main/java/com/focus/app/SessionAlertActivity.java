@@ -122,6 +122,8 @@ public class SessionAlertActivity extends Activity {
         // Top Logo + Focus title
         ImageView logoView = new ImageView(this);
         logoView.setImageResource(R.drawable.ic_focus_logo);
+        logoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logoView.setColorFilter(null);
         LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(54), dp(54));
         content.addView(logoView, logoLp);
 
