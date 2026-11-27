@@ -334,6 +334,15 @@ public class SettingsActivity extends Activity {
         r2.addView(fieldColumn("مدة الاستراحة الطويلة", "long_minutes", 15, R.drawable.ic_bed, "دقائق"), new LinearLayout.LayoutParams(0, -2, 1));
         durations.addView(r2, r2Lp);
 
+        // 1.5 وضع المؤقت
+        LinearLayout timerModeCard = card(page);
+        sectionTitle(timerModeCard, "وضع المؤقت", R.drawable.ic_timer_settings);
+        LinearLayout modeOptionsContainer = vertical();
+        LinearLayout.LayoutParams mop = lp(-1, -2);
+        mop.topMargin = dp(4);
+        timerModeCard.addView(modeOptionsContainer, mop);
+        renderModeOptions(modeOptionsContainer);
+
         // 2. الانتقال التلقائي
         LinearLayout auto = card(page);
         sectionTitle(auto, "الانتقال التلقائي", R.drawable.ic_zap);
@@ -668,6 +677,81 @@ public class SettingsActivity extends Activity {
         p.topMargin = dp(12);
         parent.addView(box, p);
         return box;
+    }
+
+    private void renderModeOptions(LinearLayout container) {
+        container.removeAllViews();
+        String currentMode = prefs != null ? prefs.getString("timer_mode", "pomodoro") : "pomodoro";
+
+        LinearLayout pomodoroOpt = buildModeOption("بومودورو", R.drawable.ic_pomodoro, "pomodoro", currentMode.equals("pomodoro"), () -> {
+            if (prefs != null) prefs.edit().putString("timer_mode", "pomodoro").apply();
+            renderModeOptions(container);
+        });
+        LinearLayout.LayoutParams p1 = lp(-1, -2);
+        p1.bottomMargin = dp(8);
+        container.addView(pomodoroOpt, p1);
+
+        LinearLayout freeOpt = buildModeOption("التركيز الحر", R.drawable.ic_countup, "free", currentMode.equals("free"), () -> {
+            if (prefs != null) prefs.edit().putString("timer_mode", "free").apply();
+            renderModeOptions(container);
+        });
+        container.addView(freeOpt, lp(-1, -2));
+    }
+
+    private LinearLayout buildModeOption(String title, int iconRes, String modeKey, boolean selected, Runnable onSelect) {
+        LinearLayout row = horizontal();
+        row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(16));
+        if (selected) {
+            bg.setColor(Color.argb(85, 81, 70, 216));
+            bg.setStroke(dp(2), Color.parseColor("#8E75E8"));
+        } else {
+            bg.setColor(Color.argb(30, 255, 255, 255));
+            bg.setStroke(dp(1), Color.argb(40, 255, 255, 255));
+        }
+        row.setBackground(bg);
+
+        TextView label = txt(title, compact ? 15 : 16, selected ? "#FFFFFF" : "#D0C9EC", true);
+        row.addView(label);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(selected ? Color.WHITE : Color.parseColor("#A88BFF"));
+        LinearLayout.LayoutParams ip = lp(22, 22);
+        ip.rightMargin = dp(8);
+        row.addView(icon, ip);
+
+        View spacer = new View(this);
+        row.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1f));
+
+        FrameLayout checkBadge = new FrameLayout(this);
+        GradientDrawable cbg = new GradientDrawable();
+        cbg.setShape(GradientDrawable.OVAL);
+        if (selected) {
+            cbg.setColor(Color.parseColor("#8E75E8"));
+            cbg.setStroke(dp(1), Color.WHITE);
+        } else {
+            cbg.setColor(Color.argb(40, 255, 255, 255));
+            cbg.setStroke(dp(1), Color.argb(70, 255, 255, 255));
+        }
+        checkBadge.setBackground(cbg);
+
+        if (selected) {
+            ImageView check = new ImageView(this);
+            check.setImageResource(R.drawable.ic_check_white);
+            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(dp(12), dp(12));
+            clp.gravity = Gravity.CENTER;
+            checkBadge.addView(check, clp);
+        }
+        row.addView(checkBadge, lp(22, 22));
+
+        row.setOnClickListener(v -> onSelect.run());
+        return row;
     }
 
     private void sectionTitle(LinearLayout parent, String title, int icon) {

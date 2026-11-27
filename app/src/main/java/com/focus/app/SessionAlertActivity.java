@@ -109,41 +109,43 @@ public class SessionAlertActivity extends Activity {
         glowLp.gravity = Gravity.CENTER;
         root.addView(ambientGlow, glowLp);
 
-        // Main scrollable content
+        // Main scrollable content (shorter, no scrollbar)
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setScrollBarSize(0);
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setGravity(Gravity.CENTER_HORIZONTAL);
-        content.setPadding(dp(20), dp(48), dp(20), dp(32));
+        content.setPadding(dp(20), dp(20), dp(20), dp(16));
 
         // Top Logo + Focus title
         ImageView logoView = new ImageView(this);
         logoView.setImageResource(R.drawable.ic_focus_logo);
         logoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         logoView.setColorFilter(null);
-        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(54), dp(54));
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(42), dp(42));
         content.addView(logoView, logoLp);
 
         TextView focusTitle = new TextView(this);
         focusTitle.setText("Focus");
         focusTitle.setTextColor(Color.WHITE);
-        focusTitle.setTextSize(22);
+        focusTitle.setTextSize(20);
         focusTitle.setTypeface(jakartaBold);
         if (Build.VERSION.SDK_INT >= 21) focusTitle.setLetterSpacing(0.04f);
         focusTitle.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-2, -2);
-        titleLp.topMargin = dp(8);
-        titleLp.bottomMargin = dp(28);
+        titleLp.topMargin = dp(4);
+        titleLp.bottomMargin = dp(14);
         content.addView(focusTitle, titleLp);
 
-        // Glassmorphic Card
+        // Glassmorphic Card (shorter and compact)
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(dp(24), dp(30), dp(24), dp(30));
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
 
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setShape(GradientDrawable.RECTANGLE);
@@ -163,19 +165,19 @@ public class SessionAlertActivity extends Activity {
 
             ImageView checkIcon = new ImageView(this);
             checkIcon.setImageResource(R.drawable.ic_check_white);
-            FrameLayout.LayoutParams cLp = new FrameLayout.LayoutParams(dp(36), dp(36));
+            FrameLayout.LayoutParams cLp = new FrameLayout.LayoutParams(dp(26), dp(26));
             cLp.gravity = Gravity.CENTER;
             checkCircle.addView(checkIcon, cLp);
 
-            LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(72), dp(72));
-            checkLp.bottomMargin = dp(18);
+            LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(54), dp(54));
+            checkLp.bottomMargin = dp(10);
             card.addView(checkCircle, checkLp);
 
             // Title: انتهى الوقت
             TextView mainTitle = new TextView(this);
             mainTitle.setText("انتهى الوقت");
             mainTitle.setTextColor(Color.WHITE);
-            mainTitle.setTextSize(28);
+            mainTitle.setTextSize(24);
             mainTitle.setTypeface(cairoBold);
             mainTitle.setGravity(Gravity.CENTER);
             card.addView(mainTitle, new LinearLayout.LayoutParams(-2, -2));
@@ -184,35 +186,35 @@ public class SessionAlertActivity extends Activity {
             TextView subTitle = new TextView(this);
             subTitle.setText("أحسنت! لقد ركزت على ما يهمك.");
             subTitle.setTextColor(Color.parseColor("#C3BCDE"));
-            subTitle.setTextSize(15);
+            subTitle.setTextSize(14);
             subTitle.setTypeface(cairoMedium);
             subTitle.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-2, -2);
-            subLp.topMargin = dp(6);
-            subLp.bottomMargin = dp(28);
+            subLp.topMargin = dp(4);
+            subLp.bottomMargin = dp(16);
             card.addView(subTitle, subLp);
         } else {
             // Break completed: انتهت الاستراحه!
             TextView mainTitle = new TextView(this);
             mainTitle.setText("انتهت الاستراحه!");
             mainTitle.setTextColor(Color.WHITE);
-            mainTitle.setTextSize(30);
+            mainTitle.setTextSize(24);
             mainTitle.setTypeface(cairoBold);
             mainTitle.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(-2, -2);
-            tLp.topMargin = dp(10);
+            tLp.topMargin = dp(6);
             card.addView(mainTitle, tLp);
 
             // Subtitle: انتهت الاستراحه، وقت المذاكرة!
             TextView subTitle = new TextView(this);
             subTitle.setText("انتهت الاستراحه، وقت المذاكرة!");
             subTitle.setTextColor(Color.parseColor("#C3BCDE"));
-            subTitle.setTextSize(15);
+            subTitle.setTextSize(14);
             subTitle.setTypeface(cairoMedium);
             subTitle.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-2, -2);
-            subLp.topMargin = dp(6);
-            subLp.bottomMargin = dp(32);
+            subLp.topMargin = dp(4);
+            subLp.bottomMargin = dp(18);
             card.addView(subTitle, subLp);
         }
 
@@ -225,24 +227,24 @@ public class SessionAlertActivity extends Activity {
             GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{ Color.parseColor("#6A45F8"), Color.parseColor("#4D36D6") }
         );
-        btnExtraBg.setCornerRadius(dp(26));
+        btnExtraBg.setCornerRadius(dp(22));
         btnExtra.setBackground(btnExtraBg);
 
         ImageView clockIcon = new ImageView(this);
         clockIcon.setImageResource(R.drawable.ic_clock_white);
-        LinearLayout.LayoutParams clockLp = new LinearLayout.LayoutParams(dp(20), dp(20));
+        LinearLayout.LayoutParams clockLp = new LinearLayout.LayoutParams(dp(18), dp(18));
         clockLp.setMargins(0, 0, dp(8), 0);
         btnExtra.addView(clockIcon, clockLp);
 
         TextView extraText = new TextView(this);
         extraText.setText("وقت إضافي");
         extraText.setTextColor(Color.WHITE);
-        extraText.setTextSize(16);
+        extraText.setTextSize(15);
         extraText.setTypeface(cairoBold);
         btnExtra.addView(extraText, new LinearLayout.LayoutParams(-2, -2));
 
-        LinearLayout.LayoutParams btnExtraLp = new LinearLayout.LayoutParams(-1, dp(52));
-        btnExtraLp.bottomMargin = dp(14);
+        LinearLayout.LayoutParams btnExtraLp = new LinearLayout.LayoutParams(-1, dp(44));
+        btnExtraLp.bottomMargin = dp(10);
         card.addView(btnExtra, btnExtraLp);
 
         btnExtra.setOnClickListener(v -> onExtraTimeClicked());
@@ -255,17 +257,17 @@ public class SessionAlertActivity extends Activity {
             GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{ Color.parseColor("#573BD3"), Color.parseColor("#3F26A8") }
         );
-        btnStopBg.setCornerRadius(dp(26));
+        btnStopBg.setCornerRadius(dp(22));
         btnStop.setBackground(btnStopBg);
 
         TextView stopText = new TextView(this);
         stopText.setText("ايقاف");
         stopText.setTextColor(Color.WHITE);
-        stopText.setTextSize(16);
+        stopText.setTextSize(15);
         stopText.setTypeface(cairoBold);
         btnStop.addView(stopText, new LinearLayout.LayoutParams(-2, -2));
 
-        LinearLayout.LayoutParams btnStopLp = new LinearLayout.LayoutParams(-1, dp(52));
+        LinearLayout.LayoutParams btnStopLp = new LinearLayout.LayoutParams(-1, dp(44));
         card.addView(btnStop, btnStopLp);
 
         btnStop.setOnClickListener(v -> onStopAlertClicked());
@@ -296,7 +298,7 @@ public class SessionAlertActivity extends Activity {
         bottomLayout.addView(b2, new LinearLayout.LayoutParams(-2, -2));
 
         LinearLayout.LayoutParams bottomLp = new LinearLayout.LayoutParams(-2, -2);
-        bottomLp.topMargin = dp(36);
+        bottomLp.topMargin = dp(14);
         content.addView(bottomLayout, bottomLp);
 
         scroll.addView(content, new FrameLayout.LayoutParams(-1, -1));
@@ -316,10 +318,10 @@ public class SessionAlertActivity extends Activity {
         ciLp.gravity = Gravity.CENTER;
         closeBtn.addView(closeIcon, ciLp);
 
-        FrameLayout.LayoutParams closeLp = new FrameLayout.LayoutParams(dp(40), dp(40));
+        FrameLayout.LayoutParams closeLp = new FrameLayout.LayoutParams(dp(36), dp(36));
         closeLp.gravity = Gravity.TOP | Gravity.RIGHT;
-        closeLp.topMargin = dp(36);
-        closeLp.rightMargin = dp(24);
+        closeLp.topMargin = dp(22);
+        closeLp.rightMargin = dp(20);
         root.addView(closeBtn, closeLp);
 
         closeBtn.setOnClickListener(v -> onStopAlertClicked());

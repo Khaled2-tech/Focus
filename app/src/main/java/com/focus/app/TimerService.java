@@ -49,7 +49,7 @@ public class TimerService extends Service {
     private final SharedPreferences.OnSharedPreferenceChangeListener ambientPrefsListener = (shared, key) -> {
         if ("ambient_play_enabled".equals(key) || "ambient_sound_key".equals(key)
                 || "ambient_volume".equals(key) || "running".equals(key) || "phase".equals(key)
-                || "end_at".equals(key)) {
+                || "end_at".equals(key) || "timer_mode".equals(key)) {
             handler.post(this::syncAmbientPlayback);
         }
     };
@@ -61,6 +61,15 @@ public class TimerService extends Service {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (prefs == null || !prefs.getBoolean("running", false)) {
+                return;
+            }
+            boolean isFree = "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            if (isFree) {
+                long now = System.currentTimeMillis();
+                long startAt = prefs.getLong("free_start_at", now);
+                long elapsed = Math.max(0, now - startAt);
+                updateTimerNotification(formatFreeTime(elapsed), true);
+                handler.postDelayed(this, 1000);
                 return;
             }
             long left = prefs.getLong("end_at", 0L) - System.currentTimeMillis();
@@ -143,6 +152,16 @@ public class TimerService extends Service {
                 handler.post(tick);
                 return START_STICKY;
             } else if (ACTION_PAUSE.equals(act)) {
+                boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+                if (isFree) {
+                    long now = System.currentTimeMillis();
+                    long elapsed = Math.max(0, now - prefs.getLong("free_start_at", now));
+                    prefs.edit().putBoolean("running", false).putLong("free_elapsed_ms", elapsed).apply();
+                    handler.removeCallbacks(tick);
+                    stopAmbientPlayback();
+                    updateTimerNotification(formatFreeTime(elapsed), false);
+                    return START_STICKY;
+                }
                 long now = System.currentTimeMillis();
                 long left = Math.max(0, prefs.getLong("end_at", now) - now);
                 prefs.edit().putBoolean("running", false).putLong("remaining_ms", left).apply();
@@ -151,6 +170,18 @@ public class TimerService extends Service {
                 updateTimerNotification(clock(left), false);
                 return START_STICKY;
             } else if (ACTION_RESUME.equals(act)) {
+                boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+                if (isFree) {
+                    long now = System.currentTimeMillis();
+                    long elapsed = prefs.getLong("free_elapsed_ms", 0L);
+                    long startAt = now - elapsed;
+                    prefs.edit().putBoolean("running", true).putLong("free_start_at", startAt).apply();
+                    handler.removeCallbacks(tick);
+                    syncAmbientPlayback();
+                    startForeground(10, buildTimerNotification(formatFreeTime(elapsed), true));
+                    handler.post(tick);
+                    return START_STICKY;
+                }
                 long total = sessionDuration();
                 long left = prefs.getLong("remaining_ms", total);
                 if (left <= 0 || left > total) left = total;
@@ -165,10 +196,19 @@ public class TimerService extends Service {
         }
 
         stopAlarm();
-        boolean isRunning = prefs.getBoolean("running", false);
-        long now = System.currentTimeMillis();
-        long left = isRunning ? Math.max(0, prefs.getLong("end_at", now) - now) : prefs.getLong("remaining_ms", sessionDuration());
-        startForeground(10, buildTimerNotification(clock(left), isRunning));
+        boolean isRunning = prefs != null && prefs.getBoolean("running", false);
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        String displayTime;
+        if (isFree) {
+            long now = System.currentTimeMillis();
+            long elapsed = isRunning ? Math.max(0, now - prefs.getLong("free_start_at", now)) : prefs.getLong("free_elapsed_ms", 0L);
+            displayTime = formatFreeTime(elapsed);
+        } else {
+            long now = System.currentTimeMillis();
+            long left = isRunning ? Math.max(0, prefs.getLong("end_at", now) - now) : prefs.getLong("remaining_ms", sessionDuration());
+            displayTime = clock(left);
+        }
+        startForeground(10, buildTimerNotification(displayTime, isRunning));
 
         handler.removeCallbacks(tick);
         if (isRunning) {
@@ -446,10 +486,24 @@ public class TimerService extends Service {
         }
     }
 
+    private String formatFreeTime(long ms) {
+        long totalSec = Math.max(0, ms / 1000);
+        long hours = totalSec / 3600;
+        long minutes = (totalSec % 3600) / 60;
+        long seconds = totalSec % 60;
+        if (hours > 0) {
+            return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds);
+        } else {
+            return String.format(Locale.US, "%02d:%02d", minutes, seconds);
+        }
+    }
+
     private void syncAmbientPlayback() {
         if (prefs == null) return;
+        boolean isFree = "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        boolean isStudy = isFree || prefs.getInt("phase", 0) == 0;
         boolean shouldPlay = prefs.getBoolean("running", false)
-                && prefs.getInt("phase", 0) == 0
+                && isStudy
                 && prefs.getBoolean("ambient_play_enabled", false);
         String key = prefs.getString("ambient_sound_key", "");
         int rawRes = rawResForAmbientKey(key);
@@ -699,11 +753,12 @@ public class TimerService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            NotificationChannel cTimer = new NotificationChannel(CHANNEL_TIMER, "مؤقّت Focus", NotificationManager.IMPORTANCE_LOW);
-            cTimer.setDescription("العداد التنازلي لحالة المؤقت");
+            NotificationChannel cTimer = new NotificationChannel(CHANNEL_TIMER, "مؤقّت Focus", NotificationManager.IMPORTANCE_DEFAULT);
+            cTimer.setDescription("العداد لحالة المؤقت");
             cTimer.setSound(null, null);
             cTimer.enableVibration(false);
             cTimer.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            cTimer.setShowBadge(false);
             nm.createNotificationChannel(cTimer);
 
             NotificationChannel cAlert = new NotificationChannel(CHANNEL_ALERTS, "تنبيهات انتهاء الجلسات", NotificationManager.IMPORTANCE_HIGH);
@@ -733,14 +788,19 @@ public class TimerService extends Service {
         toggleIntent.setAction(isRunning ? ACTION_PAUSE : ACTION_RESUME);
         PendingIntent piToggle = PendingIntent.getService(this, 1, toggleIntent, piFlags);
 
-        int phase = prefs != null ? prefs.getInt("phase", 0) : 0;
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
         String statusText;
-        if (phase == 0) {
-            statusText = isRunning ? "جلسة مذاكرة جارية" : "جلسة مذاكرة (متوقفة مؤقتاً)";
-        } else if (phase == 1) {
-            statusText = isRunning ? "استراحة قصيرة جارية" : "استراحة قصيرة (متوقفة مؤقتاً)";
+        if (isFree) {
+            statusText = isRunning ? "التركيز الحر جاري" : "التركيز الحر (متوقف مؤقتاً)";
         } else {
-            statusText = isRunning ? "استراحة طويلة جارية" : "استراحة طويلة (متوقفة مؤقتاً)";
+            int phase = prefs != null ? prefs.getInt("phase", 0) : 0;
+            if (phase == 0) {
+                statusText = isRunning ? "جلسة مذاكرة جارية" : "جلسة مذاكرة (متوقفة مؤقتاً)";
+            } else if (phase == 1) {
+                statusText = isRunning ? "استراحة قصيرة جارية" : "استراحة قصيرة (متوقفة مؤقتاً)";
+            } else {
+                statusText = isRunning ? "استراحة طويلة جارية" : "استراحة طويلة (متوقفة مؤقتاً)";
+            }
         }
         String headerTitle = "Focus • " + statusText;
 
@@ -770,7 +830,7 @@ public class TimerService extends Service {
          .setContentTitle(headerTitle)
          .setContentText(countdownStr)
          .setContentIntent(piOpen)
-         .setOngoing(isRunning)
+         .setOngoing(true)
          .setOnlyAlertOnce(true);
 
         try {
@@ -788,7 +848,7 @@ public class TimerService extends Service {
             b.setVisibility(Notification.VISIBILITY_PUBLIC);
         }
         if (Build.VERSION.SDK_INT >= 16) {
-            b.setPriority(Notification.PRIORITY_LOW);
+            b.setPriority(Notification.PRIORITY_HIGH);
             b.addAction(isRunning ? R.drawable.ic_pause : R.drawable.ic_play,
                         isRunning ? "إيقاف مؤقت" : "متابعة", piToggle);
         }

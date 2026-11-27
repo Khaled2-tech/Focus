@@ -46,12 +46,28 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private TextView phaseText, timerText, totalText, sessionsText;
+    private ImageView phaseIcon;
     private Button startButton;
     private TimerRing timerRing;
+    private FrameLayout ringFrame;
+    private LinearLayout controls;
     private ImageView wallpaper;
     private final Runnable tickerRunnable = new Runnable() {
         @Override public void run() {
             if (!running || isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+            boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            if (isFree) {
+                long now = System.currentTimeMillis();
+                long startAt = prefs.getLong("free_start_at", now);
+                long elapsed = Math.max(0, now - startAt);
+                if (timerText != null) timerText.setText(formatFreeTime(elapsed));
+                if (timerPanel != null) {
+                    timerPanel.postOnAnimation(this);
+                } else if (timerRing != null) {
+                    timerRing.postOnAnimation(this);
+                }
+                return;
+            }
             long now = System.currentTimeMillis();
             long end = prefs.getLong("end_at", now);
             long left = Math.max(0, end - now);
@@ -83,7 +99,8 @@ public class MainActivity extends Activity {
         if (key.equals("selected_theme") || key.equals("custom_background_uri")) runOnUiThread(this::loadWallpaper);
         if (key.equals("phase") || key.equals("running") || key.equals("completed_sessions")
                 || key.equals("remaining_ms") || key.equals("session_duration_ms") || key.equals("end_at")
-                || key.equals("long_after")) {
+                || key.equals("long_after") || key.equals("timer_mode") || key.equals("free_start_at")
+                || key.equals("free_elapsed_ms")) {
             runOnUiThread(this::sync);
         }
     };
@@ -368,17 +385,31 @@ public class MainActivity extends Activity {
             panel.setClipToOutline(true);
         }
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, -2);
-        pp.topMargin = dp(6);
-        pp.bottomMargin = dp(6);
+        pp.topMargin = dp(compact ? 16 : 22);
+        pp.bottomMargin = dp(compact ? 8 : 12);
         page.addView(panel, pp);
+
+        LinearLayout phaseBadge = new LinearLayout(this);
+        phaseBadge.setOrientation(LinearLayout.HORIZONTAL);
+        phaseBadge.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        phaseBadge.setGravity(Gravity.CENTER);
+        GradientDrawable badge = shape(Color.argb(160, 245, 240, 255), 20);
+        badge.setStroke(dp(1), Color.argb(170, 255, 255, 255));
+        phaseBadge.setBackground(badge);
+        phaseBadge.setPadding(dp(16), 0, dp(16), 0);
 
         phaseText = label("جلسة مذاكرة", compact ? 14 : 15, "#2C2E7A");
         phaseText.setTypeface(cairoSemi);
-        GradientDrawable badge = shape(Color.argb(160, 245, 240, 255), 20);
-        badge.setStroke(dp(1), Color.argb(170, 255, 255, 255));
-        phaseText.setBackground(badge);
-        phaseText.setPadding(dp(22), 0, dp(22), 0);
-        panel.addView(phaseText, new LinearLayout.LayoutParams(-2, dp(36)));
+        phaseBadge.addView(phaseText);
+
+        phaseIcon = new ImageView(this);
+        phaseIcon.setImageResource(R.drawable.ic_book_open);
+        phaseIcon.setColorFilter(Color.parseColor("#2C2E7A"));
+        LinearLayout.LayoutParams pip = new LinearLayout.LayoutParams(dp(18), dp(18));
+        pip.rightMargin = dp(6);
+        phaseBadge.addView(phaseIcon, pip);
+
+        panel.addView(phaseBadge, new LinearLayout.LayoutParams(-2, dp(36)));
 
         int reserved = dp(compact ? 240 : 270);
         int status = 0;
@@ -386,7 +417,7 @@ public class MainActivity extends Activity {
         if (statusId > 0) status = getResources().getDimensionPixelSize(statusId);
         int avail = dm.heightPixels - status - reserved;
         int ringSize = Math.min(dp(compact ? 165 : 190), Math.min((int) (dm.widthPixels * 0.58f), Math.max(dp(130), avail)));
-        FrameLayout ringFrame = new FrameLayout(this);
+        ringFrame = new FrameLayout(this);
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ringSize, ringSize);
         rp.topMargin = dp(compact ? 6 : 12);
         rp.bottomMargin = dp(compact ? 6 : 8);
@@ -415,7 +446,7 @@ public class MainActivity extends Activity {
         panel.addView(startButton, sp);
         startButton.setOnClickListener(v -> toggleTimer());
 
-        LinearLayout controls = new LinearLayout(this);
+        controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         controls.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         String[] names = {"وقت إضافي", "تخطّي", "إنهاء"};
@@ -481,7 +512,8 @@ public class MainActivity extends Activity {
             bottom.setClipToOutline(true);
         }
         LinearLayout.LayoutParams botp = new LinearLayout.LayoutParams(-1, -2);
-        botp.topMargin = dp(10);
+        botp.topMargin = dp(compact ? 14 : 18);
+        botp.bottomMargin = dp(compact ? 14 : 20);
         page.addView(bottom, botp);
         sessionsText = label("جلسات المذاكرة", compact ? 15 : 17, "#FFFFFF");
         sessionsText.setTypeface(cairoSemi);
@@ -510,9 +542,59 @@ public class MainActivity extends Activity {
         return stored > 0 ? stored : durationFor(phase);
     }
     private void updatePhaseBadge() {
-        phaseText.setText(phase == 0 ? "جلسة مذاكرة" : phase == 1 ? "استراحة قصيرة" : "استراحة طويلة");
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) {
+            phaseText.setText("التركيز الحر");
+            if (phaseIcon != null) {
+                phaseIcon.setImageResource(R.drawable.ic_countup);
+                phaseIcon.setVisibility(View.VISIBLE);
+            }
+        } else {
+            if (phase == 0) {
+                phaseText.setText("جلسة مذاكرة");
+                if (phaseIcon != null) phaseIcon.setImageResource(R.drawable.ic_book_open);
+            } else if (phase == 1) {
+                phaseText.setText("استراحة قصيرة");
+                if (phaseIcon != null) phaseIcon.setImageResource(R.drawable.ic_coffee);
+            } else {
+                phaseText.setText("استراحة طويلة");
+                if (phaseIcon != null) phaseIcon.setImageResource(R.drawable.ic_bed);
+            }
+            if (phaseIcon != null) phaseIcon.setVisibility(View.VISIBLE);
+        }
     }
     private void toggleTimer() {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) {
+            if (running) {
+                long now = System.currentTimeMillis();
+                long startAt = prefs.getLong("free_start_at", now);
+                long elapsed = Math.max(0, now - startAt);
+                prefs.edit().putBoolean("running", false).putLong("free_elapsed_ms", elapsed).apply();
+                Intent pauseIntent = new Intent(this, TimerService.class);
+                pauseIntent.setAction(TimerService.ACTION_PAUSE);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(pauseIntent); else startService(pauseIntent);
+                running = false;
+                stopTicker();
+                startButton.setText("استئناف");
+                return;
+            }
+            long now = System.currentTimeMillis();
+            long elapsed = prefs.getLong("free_elapsed_ms", 0L);
+            long startAt = now - elapsed;
+            prefs.edit().putBoolean("running", true).putLong("free_start_at", startAt).apply();
+            running = true;
+            Intent i = new Intent(this, TimerService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+            try {
+                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null) nm.cancel(11);
+            } catch (Exception ignored) {}
+            startButton.setText("إيقاف مؤقت");
+            startTicker();
+            return;
+        }
+
         if (running) {
             long left = Math.max(0, prefs.getLong("end_at", System.currentTimeMillis()) - System.currentTimeMillis());
             prefs.edit().putBoolean("running", false).putLong("remaining_ms", left).apply();
@@ -705,6 +787,21 @@ public class MainActivity extends Activity {
         try {
             TimerService.stopAlarmNow(this);
         } catch (Exception ignored) {}
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) {
+            if (prefs != null) {
+                prefs.edit()
+                        .putLong("free_elapsed_ms", 0L)
+                        .putLong("free_start_at", 0L)
+                        .putBoolean("running", false)
+                        .apply();
+            }
+            running = false;
+            if (timerText != null) timerText.setText(formatFreeTime(0));
+            if (startButton != null) startButton.setText("ابدأ");
+            sync();
+            return;
+        }
         long d = durationFor(phase);
         if (prefs != null) {
             prefs.edit()
@@ -738,6 +835,31 @@ public class MainActivity extends Activity {
             phase = prefs.getInt("phase", 0);
             running = prefs.getBoolean("running", false);
             updatePhaseBadge();
+
+            boolean isFree = "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            if (isFree) {
+                if (timerRing != null) timerRing.setVisibility(View.GONE);
+                if (totalText != null) totalText.setVisibility(View.GONE);
+                if (controls != null) controls.setVisibility(View.GONE);
+                if (sessionsCard != null) sessionsCard.setVisibility(View.GONE);
+
+                long now = System.currentTimeMillis();
+                long elapsed = running ? Math.max(0, now - prefs.getLong("free_start_at", now)) : prefs.getLong("free_elapsed_ms", 0L);
+                if (timerText != null) timerText.setText(formatFreeTime(elapsed));
+                if (startButton != null) {
+                    startButton.setText(running ? "إيقاف مؤقت" : (elapsed > 0 ? "استئناف" : "ابدأ"));
+                }
+                if (running) startTicker();
+                else stopTicker();
+                return;
+            }
+
+            // Pomodoro Mode restored
+            if (timerRing != null) timerRing.setVisibility(View.VISIBLE);
+            if (totalText != null) totalText.setVisibility(View.VISIBLE);
+            if (controls != null) controls.setVisibility(View.VISIBLE);
+            if (sessionsCard != null) sessionsCard.setVisibility(View.VISIBLE);
+
             long d = sessionDuration();
             long left = running ? Math.max(0, prefs.getLong("end_at", System.currentTimeMillis()) - System.currentTimeMillis()) : prefs.getLong("remaining_ms", d);
             if (!running && left <= 0) {
@@ -762,6 +884,17 @@ public class MainActivity extends Activity {
         long s = Math.max(0, (ms + 999) / 1000);
         return String.format(Locale.US, "%02d:%02d", s / 60, s % 60);
     }
+    private String formatFreeTime(long ms) {
+        long totalSec = Math.max(0, ms / 1000);
+        long hours = totalSec / 3600;
+        long minutes = (totalSec % 3600) / 60;
+        long seconds = totalSec % 60;
+        if (hours > 0) {
+            return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds);
+        } else {
+            return String.format(Locale.US, "%02d:%02d", minutes, seconds);
+        }
+    }
     private void updateRing(long left) {
         if (timerRing == null) return;
         float f = sessionDuration() <= 0 ? 1f : Math.max(0f, Math.min(1f, (float) left / sessionDuration()));
@@ -769,13 +902,21 @@ public class MainActivity extends Activity {
     }
     private void startTicker() {
         stopTicker();
-        if (running && timerRing != null) {
-            timerRing.postOnAnimation(tickerRunnable);
+        if (running) {
+            boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            if (isFree && timerPanel != null) {
+                timerPanel.postOnAnimation(tickerRunnable);
+            } else if (timerRing != null) {
+                timerRing.postOnAnimation(tickerRunnable);
+            }
         }
     }
     private void stopTicker() {
         if (timerRing != null) {
             timerRing.removeCallbacks(tickerRunnable);
+        }
+        if (timerPanel != null) {
+            timerPanel.removeCallbacks(tickerRunnable);
         }
     }
     private void renderProgressDots() {
