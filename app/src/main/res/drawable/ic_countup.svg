@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 225 225" width="225" height="225" fill="none">
+  
+  
+
+  
+  <g id="stopwatch" stroke="#000000" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    
+    
+    <g id="top-button">
+      
+      <rect id="crown-head" x="91" y="45" width="49" height="16" rx="8" />
+      
+      <line id="crown-neck-left" x1="106" y1="61" x2="106" y2="74" />
+      <line id="crown-neck-right" x1="125" y1="61" x2="125" y2="74" />
+    </g>
+
+    
+    <g id="side-button">
+      <path id="side-button-arc" d="M 74 93 L 67 86 A 7.5 7.5 0 0 1 77.6 75.4 L 84.6 82.4" />
+    </g>
+
+    
+    <path id="watch-body-arc" d="M 166.5 134 A 52 52 0 1 0 127 176.7" />
+
+    
+    <g id="dial-ticks">
+      
+      <line id="tick-left" x1="76.5" y1="126" x2="83.5" y2="126" />
+      
+      <line id="tick-right" x1="147.5" y1="126" x2="154.5" y2="126" />
+      
+      <line id="tick-bottom" x1="115.5" y1="158" x2="115.5" y2="165" />
+      
+      <line id="tick-top-left" x1="88" y1="98.5" x2="93" y2="103.5" />
+      
+      <line id="tick-top-right" x1="143" y1="98.5" x2="138" y2="103.5" />
+    </g>
+
+    
+    <g id="watch-hands">
+      
+      <line id="hand-vertical" x1="115.5" y1="88.5" x2="115.5" y2="118.5" />
+      
+      <line id="hand-diagonal" x1="110" y1="131.5" x2="88.5" y2="153" />
+      
+      <circle id="center-pivot" cx="115.5" cy="126" r="7.5" />
+    </g>
+
+  </g>
+
+  
+  <g id="infinity-symbol">
+    <path id="infinity-path" d="M 154 156.5 C 146 146.5 127.5 146.5 127.5 156.5 C 127.5 166.5 146 166.5 154 156.5 C 162 146.5 180.5 146.5 180.5 156.5 C 180.5 166.5 162 166.5 154 156.5 Z" stroke="#000000" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
