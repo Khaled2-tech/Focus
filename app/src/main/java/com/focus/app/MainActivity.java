@@ -935,6 +935,14 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        try {
+            Intent serviceIntent = new Intent(this, TimerService.class);
+            if (Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception ignored) {}
         if (prefs != null && phaseText != null) { loadWallpaper(); sync(); }
         if (running) startTicker();
     }
