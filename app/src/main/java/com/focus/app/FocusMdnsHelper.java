@@ -162,7 +162,7 @@ public class FocusMdnsHelper {
             baos.write(0x00); baos.write(0x00); baos.write(0x00); baos.write(120);
             baos.write(0x00); baos.write(0x04);
 
-            String[] parts = ipStr.split("\.");
+            String[] parts = ipStr.split("\\.");
             for (String p : parts) {
                 baos.write(Integer.parseInt(p));
             }
