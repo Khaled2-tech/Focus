@@ -1,1 +1,45 @@
-test
+name: Build Focus APK
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Checkout Focus_Web assets
+        uses: actions/checkout@v4
+        with:
+          repository: Khaled2-tech/Focus_Web
+          path: temp_web
+      - name: Copy Web UI to Android assets
+        run: |
+          mkdir -p app/src/main/assets/web
+          cp temp_web/index.html app/src/main/assets/web/
+          cp -r temp_web/css app/src/main/assets/web/
+          cp -r temp_web/js app/src/main/assets/web/
+          mkdir -p app/src/main/assets/web/themes
+          cp temp_web/themes/themes.json app/src/main/assets/web/themes/ || true
+          rm -rf temp_web
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Focus-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
