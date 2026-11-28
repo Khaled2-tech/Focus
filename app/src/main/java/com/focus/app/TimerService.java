@@ -22,6 +22,8 @@ import android.os.Vibrator;
 import android.widget.RemoteViews;
 
 import java.util.Locale;
+import org.json.JSONObject;
+import android.util.Log;
 
 public class TimerService extends Service {
     public static final String ACTION_REFRESH = "com.focus.app.REFRESH";
@@ -57,6 +59,8 @@ public class TimerService extends Service {
     private int currentRepeat;
     private int totalRepeats;
     private boolean finishing;
+    private FocusWebServer webServer;
+    private FocusMdnsHelper mdnsHelper;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -69,6 +73,7 @@ public class TimerService extends Service {
                 long startAt = prefs.getLong("free_start_at", now);
                 long elapsed = Math.max(0, now - startAt);
                 updateTimerNotification(formatFreeTime(elapsed), true);
+                broadcastWebState();
                 handler.postDelayed(this, 1000);
                 return;
             }
@@ -82,6 +87,7 @@ public class TimerService extends Service {
                 return;
             }
             updateTimerNotification(clock(left), true);
+            broadcastWebState();
             handler.postDelayed(this, 1000);
         }
     };
@@ -94,6 +100,7 @@ public class TimerService extends Service {
         createChannels();
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         if (pm != null) wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "focus:timer");
+        startWebServer();
     }
 
     @Override
@@ -128,6 +135,7 @@ public class TimerService extends Service {
                 syncAmbientPlayback();
                 startForeground(10, buildTimerNotification(clock(dur), true));
                 handler.post(tick);
+                broadcastWebState();
                 return START_STICKY;
             } else if (ACTION_EXTRA_TIME.equals(act)) {
                 stopAlarmOnly();
@@ -150,6 +158,7 @@ public class TimerService extends Service {
                 syncAmbientPlayback();
                 startForeground(10, buildTimerNotification(clock(addMs), true));
                 handler.post(tick);
+                broadcastWebState();
                 return START_STICKY;
             } else if (ACTION_PAUSE.equals(act)) {
                 boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
@@ -160,6 +169,7 @@ public class TimerService extends Service {
                     handler.removeCallbacks(tick);
                     stopAmbientPlayback();
                     updateTimerNotification(formatFreeTime(elapsed), false);
+                    broadcastWebState();
                     return START_STICKY;
                 }
                 long now = System.currentTimeMillis();
@@ -168,6 +178,7 @@ public class TimerService extends Service {
                 handler.removeCallbacks(tick);
                 stopAmbientPlayback();
                 updateTimerNotification(clock(left), false);
+                broadcastWebState();
                 return START_STICKY;
             } else if (ACTION_RESUME.equals(act)) {
                 boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
@@ -209,6 +220,7 @@ public class TimerService extends Service {
             displayTime = clock(left);
         }
         startForeground(10, buildTimerNotification(displayTime, isRunning));
+        broadcastWebState();
 
         handler.removeCallbacks(tick);
         if (isRunning) {
@@ -880,6 +892,7 @@ public class TimerService extends Service {
             if (nm != null) nm.cancel(10);
         } catch (Exception ignored) {}
         releaseWake();
+        stopWebServer();
         super.onDestroy();
     }
 
@@ -887,4 +900,208 @@ public class TimerService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
+
+    private void startWebServer() {
+        try {
+            if (webServer == null) {
+                webServer = new FocusWebServer(this, new FocusWebServer.ActionListener() {
+                    @Override public void onActionStart() { handleWebStart(); }
+                    @Override public void onActionPause() { handleWebPause(); }
+                    @Override public void onActionReset() { handleWebReset(); }
+                    @Override public void onActionAddTime(long addSeconds) { handleWebAddTime(addSeconds); }
+                    @Override public void onActionSkip() { handleWebSkip(); }
+                    @Override public void onActionSetMode(String mode) { handleWebSetMode(mode); }
+                    @Override public JSONObject onRequestSyncState() { return getCurrentStateJson(); }
+                });
+                webServer.start();
+                Log.i("TimerService", "Focus WebServer started on port " + FocusWebServer.PORT);
+            }
+            if (mdnsHelper == null) {
+                mdnsHelper = new FocusMdnsHelper(this);
+                mdnsHelper.start(FocusWebServer.PORT);
+            }
+        } catch (Exception e) {
+            Log.w("TimerService", "Failed to start WebServer / mDNS", e);
+        }
+    }
+
+    private void stopWebServer() {
+        if (webServer != null) {
+            try { webServer.stop(); } catch (Exception ignored) {}
+            webServer = null;
+        }
+        if (mdnsHelper != null) {
+            try { mdnsHelper.stop(); } catch (Exception ignored) {}
+            mdnsHelper = null;
+        }
+    }
+
+    private void broadcastWebState() {
+        if (webServer == null || prefs == null) return;
+        try {
+            boolean isFree = "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            boolean isRunning = prefs.getBoolean("running", false);
+            long now = System.currentTimeMillis();
+            if (isFree) {
+                long elapsed = isRunning ? Math.max(0, now - prefs.getLong("free_start_at", now)) : prefs.getLong("free_elapsed_ms", 0L);
+                webServer.broadcastState("free", "free", elapsed / 1000, 0, isRunning);
+            } else {
+                int p = prefs.getInt("phase", 0);
+                String phaseStr = (p == 0) ? "study" : (p == 1 ? "short_break" : "long_break");
+                long total = sessionDuration();
+                long left = isRunning ? Math.max(0, prefs.getLong("end_at", now) - now) : prefs.getLong("remaining_ms", total);
+                webServer.broadcastState("pomodoro", phaseStr, Math.max(0, left / 1000), total / 1000, isRunning);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private JSONObject getCurrentStateJson() {
+        try {
+            boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+            boolean isRunning = prefs != null && prefs.getBoolean("running", false);
+            long now = System.currentTimeMillis();
+            JSONObject payload = new JSONObject();
+            if (isFree) {
+                payload.put("mode", "free");
+                payload.put("phase", "free");
+                long elapsed = isRunning ? Math.max(0, now - prefs.getLong("free_start_at", now)) : prefs.getLong("free_elapsed_ms", 0L);
+                payload.put("remainingSeconds", elapsed / 1000);
+                payload.put("totalSeconds", 0);
+            } else {
+                payload.put("mode", "pomodoro");
+                int p = prefs != null ? prefs.getInt("phase", 0) : 0;
+                payload.put("phase", (p == 0) ? "study" : (p == 1 ? "short_break" : "long_break"));
+                long total = sessionDuration();
+                long left = isRunning ? Math.max(0, prefs.getLong("end_at", now) - now) : prefs.getLong("remaining_ms", total);
+                payload.put("remainingSeconds", Math.max(0, left / 1000));
+                payload.put("totalSeconds", total / 1000);
+            }
+            payload.put("state", isRunning ? "running" : "paused");
+            return payload;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void handleWebStart() {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) {
+            long now = System.currentTimeMillis();
+            long elapsed = prefs.getLong("free_elapsed_ms", 0L);
+            long startAt = now - elapsed;
+            prefs.edit().putBoolean("running", true).putLong("free_start_at", startAt).apply();
+            handler.removeCallbacks(tick);
+            syncAmbientPlayback();
+            startForeground(10, buildTimerNotification(formatFreeTime(elapsed), true));
+            handler.post(tick);
+            broadcastWebState();
+            return;
+        }
+        long total = sessionDuration();
+        long left = prefs.getLong("remaining_ms", total);
+        if (left <= 0 || left > total) left = total;
+        long endAt = System.currentTimeMillis() + left;
+        prefs.edit().putBoolean("running", true).putLong("end_at", endAt).apply();
+        handler.removeCallbacks(tick);
+        syncAmbientPlayback();
+        startForeground(10, buildTimerNotification(clock(left), true));
+        handler.post(tick);
+        broadcastWebState();
+    }
+
+    private void handleWebPause() {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) {
+            long now = System.currentTimeMillis();
+            long elapsed = Math.max(0, now - prefs.getLong("free_start_at", now));
+            prefs.edit().putBoolean("running", false).putLong("free_elapsed_ms", elapsed).apply();
+            handler.removeCallbacks(tick);
+            stopAmbientPlayback();
+            updateTimerNotification(formatFreeTime(elapsed), false);
+            broadcastWebState();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long left = Math.max(0, prefs.getLong("end_at", now) - now);
+        prefs.edit().putBoolean("running", false).putLong("remaining_ms", left).apply();
+        handler.removeCallbacks(tick);
+        stopAmbientPlayback();
+        updateTimerNotification(clock(left), false);
+        broadcastWebState();
+    }
+
+    private void handleWebReset() {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        handler.removeCallbacks(tick);
+        stopAmbientPlayback();
+        stopAlarmOnly();
+        if (isFree) {
+            prefs.edit().putBoolean("running", false).putLong("free_elapsed_ms", 0L).apply();
+            updateTimerNotification(formatFreeTime(0), false);
+        } else {
+            long total = sessionDuration();
+            prefs.edit().putBoolean("running", false).putLong("remaining_ms", total).apply();
+            updateTimerNotification(clock(total), false);
+        }
+        broadcastWebState();
+    }
+
+    private void handleWebAddTime(long addSeconds) {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) return;
+        long addMs = addSeconds * 1000L;
+        boolean isRunning = prefs != null && prefs.getBoolean("running", false);
+        long total = sessionDuration() + addMs;
+        if (isRunning) {
+            long endAt = prefs.getLong("end_at", System.currentTimeMillis()) + addMs;
+            long left = Math.max(0, endAt - System.currentTimeMillis());
+            prefs.edit().putLong("session_duration_ms", total).putLong("end_at", endAt).putLong("remaining_ms", left).apply();
+            updateTimerNotification(clock(left), true);
+        } else {
+            long left = prefs.getLong("remaining_ms", sessionDuration()) + addMs;
+            prefs.edit().putLong("session_duration_ms", total).putLong("remaining_ms", left).apply();
+            updateTimerNotification(clock(left), false);
+        }
+        broadcastWebState();
+    }
+
+    private void handleWebSkip() {
+        boolean isFree = prefs != null && "free".equals(prefs.getString("timer_mode", "pomodoro"));
+        if (isFree) return;
+        stopAmbientPlayback();
+        stopAlarmOnly();
+        handler.removeCallbacks(tick);
+        int currentPhase = prefs != null ? prefs.getInt("phase", 0) : 0;
+        int nextPhase = (currentPhase == 0) ? 1 : 0;
+        long nextDur = minutesFor(nextPhase) * 60000L;
+        prefs.edit()
+                .putInt("phase", nextPhase)
+                .putBoolean("running", false)
+                .putLong("session_duration_ms", nextDur)
+                .putLong("remaining_ms", nextDur)
+                .apply();
+        updateTimerNotification(clock(nextDur), false);
+        broadcastWebState();
+    }
+
+    private void handleWebSetMode(String mode) {
+        if (!"pomodoro".equals(mode) && !"free".equals(mode)) return;
+        handler.removeCallbacks(tick);
+        stopAmbientPlayback();
+        stopAlarmOnly();
+        prefs.edit()
+                .putString("timer_mode", mode)
+                .putBoolean("running", false)
+                .putLong("free_elapsed_ms", 0L)
+                .apply();
+        if ("free".equals(mode)) {
+            updateTimerNotification(formatFreeTime(0), false);
+        } else {
+            long dur = sessionDuration();
+            prefs.edit().putLong("remaining_ms", dur).apply();
+            updateTimerNotification(clock(dur), false);
+        }
+        broadcastWebState();
+    }
+
 }
